@@ -120,3 +120,177 @@ export async function fileExists(filePath: string, vaultPath: string): Promise<b
     return false;
   }
 }
+
+/**
+ * Section boundaries in a markdown file
+ */
+export interface SectionBoundary {
+  headingStart: number;  // Start of heading line
+  headingEnd: number;    // End of heading line (after newline)
+  contentStart: number;  // Start of section content
+  contentEnd: number;    // End of section content (before next heading or EOF)
+  level: number;         // Heading level (1-6)
+}
+
+/**
+ * Escape special regex characters in a string
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Find section boundaries by heading text
+ * Returns null if heading not found
+ */
+export function findSectionByHeading(content: string, heading: string): SectionBoundary | null {
+  // Normalize heading - user might pass "Progress Log" or "## Progress Log"
+  const headingMatch = heading.match(/^(#{1,6})\s+(.+)$/);
+  let targetLevel: number | null = null;
+  let headingText: string;
+
+  if (headingMatch) {
+    targetLevel = headingMatch[1].length;
+    headingText = headingMatch[2].trim();
+  } else {
+    headingText = heading.trim();
+  }
+
+  // Build regex to find the heading
+  // If level specified, match exactly that level; otherwise match any level
+  const levelPattern = targetLevel ? `#{${targetLevel}}` : '#{1,6}';
+  const headingRegex = new RegExp(`^(${levelPattern})\\s+${escapeRegex(headingText)}\\s*$`, 'mi');
+
+  const match = headingRegex.exec(content);
+  if (!match || match.index === undefined) {
+    return null;
+  }
+
+  const headingStart = match.index;
+  const level = match[1].length;
+
+  // Find end of heading line
+  const lineEnd = content.indexOf('\n', headingStart);
+  const headingEnd = lineEnd === -1 ? content.length : lineEnd + 1;
+  const contentStart = headingEnd;
+
+  // Find next heading of same or higher level (lower number = higher level)
+  // E.g., if we're in ## Section, stop at # or ##, but not ###
+  const nextHeadingRegex = new RegExp(`^#{1,${level}}\\s+`, 'm');
+  const restOfContent = content.slice(contentStart);
+  const nextMatch = nextHeadingRegex.exec(restOfContent);
+
+  const contentEnd = nextMatch?.index !== undefined
+    ? contentStart + nextMatch.index
+    : content.length;
+
+  return {
+    headingStart,
+    headingEnd,
+    contentStart,
+    contentEnd,
+    level
+  };
+}
+
+/**
+ * Append content to a section (before the next heading)
+ */
+export async function appendToSection(
+  filePath: string,
+  vaultPath: string,
+  heading: string,
+  newContent: string
+): Promise<{ success: boolean; error?: string }> {
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.join(vaultPath, filePath);
+
+  const rawContent = await fs.readFile(absolutePath, 'utf-8');
+  const section = findSectionByHeading(rawContent, heading);
+
+  if (!section) {
+    return { success: false, error: `Section "${heading}" not found` };
+  }
+
+  // Ensure proper spacing
+  const existingContent = rawContent.slice(section.contentStart, section.contentEnd);
+  const needsLeadingNewline = existingContent.length > 0 && !existingContent.endsWith('\n\n');
+  const needsTrailingNewline = section.contentEnd < rawContent.length;
+
+  const insertion = (needsLeadingNewline ? '\n' : '') +
+                    newContent +
+                    (needsTrailingNewline ? '\n\n' : '\n');
+
+  // Insert at end of section
+  const updatedContent =
+    rawContent.slice(0, section.contentEnd).trimEnd() + '\n\n' +
+    newContent.trim() + '\n' +
+    (section.contentEnd < rawContent.length ? '\n' + rawContent.slice(section.contentEnd) : '');
+
+  await fs.writeFile(absolutePath, updatedContent, 'utf-8');
+
+  return { success: true };
+}
+
+/**
+ * Prepend content to a section (right after the heading)
+ */
+export async function prependToSection(
+  filePath: string,
+  vaultPath: string,
+  heading: string,
+  newContent: string
+): Promise<{ success: boolean; error?: string }> {
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.join(vaultPath, filePath);
+
+  const rawContent = await fs.readFile(absolutePath, 'utf-8');
+  const section = findSectionByHeading(rawContent, heading);
+
+  if (!section) {
+    return { success: false, error: `Section "${heading}" not found` };
+  }
+
+  // Insert right after heading with proper spacing
+  const updatedContent =
+    rawContent.slice(0, section.headingEnd) +
+    '\n' + newContent.trim() + '\n' +
+    rawContent.slice(section.contentStart);
+
+  await fs.writeFile(absolutePath, updatedContent, 'utf-8');
+
+  return { success: true };
+}
+
+/**
+ * Replace entire section content (between heading and next heading)
+ */
+export async function replaceSection(
+  filePath: string,
+  vaultPath: string,
+  heading: string,
+  newContent: string
+): Promise<{ success: boolean; error?: string }> {
+  const absolutePath = path.isAbsolute(filePath)
+    ? filePath
+    : path.join(vaultPath, filePath);
+
+  const rawContent = await fs.readFile(absolutePath, 'utf-8');
+  const section = findSectionByHeading(rawContent, heading);
+
+  if (!section) {
+    return { success: false, error: `Section "${heading}" not found` };
+  }
+
+  // Replace section content
+  const updatedContent =
+    rawContent.slice(0, section.headingEnd) +
+    '\n' + newContent.trim() + '\n\n' +
+    rawContent.slice(section.contentEnd);
+
+  await fs.writeFile(absolutePath, updatedContent, 'utf-8');
+
+  return { success: true };
+}
