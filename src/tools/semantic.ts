@@ -9,7 +9,7 @@ import * as crypto from 'crypto';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { Config, getPrimaryVault } from '../config.js';
 import { ToolResponse } from '../types/index.js';
-import { parseMarkdownFile, extractTitle } from '../parsers/markdown.js';
+import { parseMarkdownFile, extractTitle, extractSections } from '../parsers/markdown.js';
 import {
   generateEmbedding,
   checkOllamaAvailability,
@@ -39,12 +39,53 @@ function hashContent(content: string): string {
 }
 
 /**
+ * Expand query into multiple variants using Ollama
+ * Returns original query plus up to 3 alternative phrasings
+ */
+async function expandQuery(query: string, ollamaConfig: OllamaConfig): Promise<string[]> {
+  try {
+    const response = await fetch(`${ollamaConfig.host}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'qwen2.5:7b',  // Fast model for expansion
+        prompt: `Generate 2 alternative search queries for: "${query}"
+
+Rules:
+- Each alternative should capture the same intent differently
+- Use different keywords and phrasings
+- Output ONLY the queries, one per line, no numbering or explanations
+
+Alternative queries:`,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      return [query];  // Fallback to original
+    }
+
+    const data = await response.json() as { response: string };
+    const alternatives = data.response
+      .trim()
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 3 && line.length < 200)
+      .slice(0, 2);
+
+    return [query, ...alternatives];
+  } catch {
+    return [query];  // Fallback to original on error
+  }
+}
+
+/**
  * Tool definitions for semantic search
  */
 export const semanticTools: Tool[] = [
   {
     name: 'semantic_search',
-    description: 'Search vault using semantic similarity. Finds content by meaning, not just keywords. Requires indexed vault.',
+    description: 'Search vault using hybrid semantic + keyword search. Finds content by meaning and exact matches. Requires indexed vault.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -61,6 +102,11 @@ export const semanticTools: Tool[] = [
           type: 'number',
           description: 'Minimum similarity score (0-1)',
           default: 0.5
+        },
+        expand: {
+          type: 'boolean',
+          description: 'Expand query into multiple variants for better recall',
+          default: false
         }
       },
       required: ['query']
@@ -142,6 +188,7 @@ export function createSemanticHandlers(config: Config) {
       query: string;
       limit?: number;
       minSimilarity?: number;
+      expand?: boolean;
     }): Promise<ToolResponse> => {
       try {
         // Check Ollama availability
@@ -169,15 +216,109 @@ export function createSemanticHandlers(config: Config) {
           };
         }
 
-        // Generate query embedding
-        const queryResult = await generateEmbedding(args.query, ollamaConfig);
+        const limit = args.limit || 10;
+        const minSimilarity = args.minSimilarity || 0.5;
 
-        // Search
-        const results = store.search(
-          queryResult.embedding,
-          args.limit || 10,
-          args.minSimilarity || 0.5
-        );
+        // Optionally expand query into multiple variants
+        const queries = args.expand
+          ? await expandQuery(args.query, ollamaConfig)
+          : [args.query];
+
+        // Collect results from all query variants
+        const allSemanticResults: Array<{
+          filePath: string;
+          blockId: string | null;
+          similarity: number;
+          metadata: Record<string, unknown>;
+        }> = [];
+        const allKeywordResults: Array<{
+          filePath: string;
+          blockId: string | null;
+          score: number;
+        }> = [];
+
+        for (const q of queries) {
+          // Generate embedding for this query variant
+          const queryResult = await generateEmbedding(q, ollamaConfig);
+
+          // Semantic search
+          const semResults = store.search(
+            queryResult.embedding,
+            limit * 2,  // Get extra for merging
+            minSimilarity * 0.7  // Lower threshold for variants
+          );
+          allSemanticResults.push(...semResults);
+
+          // Keyword search
+          const kwResults = store.keywordSearch(q, limit * 2);
+          allKeywordResults.push(...kwResults);
+        }
+
+        // Use collected results for merging
+        const semanticResults = allSemanticResults;
+        const keywordResults = allKeywordResults;
+
+        // Merge results with weighted scoring
+        // Semantic weight: 0.7, Keyword weight: 0.3
+        const scoreMap = new Map<string, {
+          filePath: string;
+          blockId: string | null;
+          semanticScore: number;
+          keywordScore: number;
+          combinedScore: number;
+          metadata: Record<string, unknown>;
+        }>();
+
+        // Normalize keyword scores (BM25 scores vary widely)
+        const maxKeywordScore = Math.max(...keywordResults.map(r => r.score), 1);
+
+        // Add semantic results
+        for (const r of semanticResults) {
+          const key = `${r.filePath}:${r.blockId || ''}`;
+          scoreMap.set(key, {
+            filePath: r.filePath,
+            blockId: r.blockId,
+            semanticScore: r.similarity,
+            keywordScore: 0,
+            combinedScore: r.similarity * 0.7,
+            metadata: r.metadata
+          });
+        }
+
+        // Merge keyword results
+        for (const r of keywordResults) {
+          const key = `${r.filePath}:${r.blockId || ''}`;
+          const normalizedScore = r.score / maxKeywordScore;  // Normalize to 0-1
+          const existing = scoreMap.get(key);
+
+          if (existing) {
+            existing.keywordScore = normalizedScore;
+            existing.combinedScore = existing.semanticScore * 0.7 + normalizedScore * 0.3;
+          } else {
+            // Keyword-only result - still include if score is good
+            scoreMap.set(key, {
+              filePath: r.filePath,
+              blockId: r.blockId,
+              semanticScore: 0,
+              keywordScore: normalizedScore,
+              combinedScore: normalizedScore * 0.3,
+              metadata: {}
+            });
+          }
+        }
+
+        // Sort by combined score, filter by threshold, deduplicate by file
+        const sortedResults = Array.from(scoreMap.values())
+          .filter(r => r.combinedScore >= minSimilarity * 0.7 || r.semanticScore >= minSimilarity)
+          .sort((a, b) => b.combinedScore - a.combinedScore);
+
+        // Deduplicate by file path, keeping highest combined score
+        const seen = new Set<string>();
+        const results = sortedResults.filter(r => {
+          if (seen.has(r.filePath)) return false;
+          seen.add(r.filePath);
+          return true;
+        }).slice(0, limit);
 
         // Enrich results with file titles
         const enrichedResults = await Promise.all(results.map(async r => {
@@ -186,14 +327,18 @@ export function createSemanticHandlers(config: Config) {
             return {
               path: r.filePath,
               title: extractTitle(parsed),
-              similarity: Math.round(r.similarity * 1000) / 1000,
+              similarity: Math.round(r.combinedScore * 1000) / 1000,
+              semanticScore: Math.round(r.semanticScore * 1000) / 1000,
+              keywordScore: Math.round(r.keywordScore * 1000) / 1000,
               preview: parsed.content.slice(0, 200) + (parsed.content.length > 200 ? '...' : '')
             };
           } catch {
             return {
               path: r.filePath,
               title: path.basename(r.filePath, '.md'),
-              similarity: Math.round(r.similarity * 1000) / 1000,
+              similarity: Math.round(r.combinedScore * 1000) / 1000,
+              semanticScore: Math.round(r.semanticScore * 1000) / 1000,
+              keywordScore: Math.round(r.keywordScore * 1000) / 1000,
               preview: ''
             };
           }
@@ -204,7 +349,9 @@ export function createSemanticHandlers(config: Config) {
             type: 'text',
             text: JSON.stringify({
               query: args.query,
+              queriesUsed: queries,  // Show expanded queries if any
               resultCount: enrichedResults.length,
+              searchType: args.expand ? 'hybrid+expansion' : 'hybrid',
               results: enrichedResults
             }, null, 2)
           }],
@@ -237,7 +384,8 @@ export function createSemanticHandlers(config: Config) {
           ? path.join(vault.path, args.directory)
           : vault.path;
 
-        let indexed = 0;
+        let indexedSections = 0;
+        let indexedFiles = 0;
         let skipped = 0;
         let errors = 0;
 
@@ -255,34 +403,84 @@ export function createSemanticHandlers(config: Config) {
               continue;
             }
 
-            const contentHash = hashContent(content);
+            // Extract sections for heading-based chunking
+            const sections = extractSections(trimmedContent);
 
-            // Skip if already indexed and unchanged
-            if (!args.force && store.isUpToDate(filePath, contentHash)) {
-              skipped++;
+            // If no sections found (no headings), index whole file
+            if (sections.length === 0) {
+              const contentHash = hashContent(content);
+
+              // Skip if already indexed and unchanged
+              if (!args.force && store.isUpToDate(filePath, contentHash)) {
+                skipped++;
+                continue;
+              }
+
+              const result = await generateEmbedding(content, ollamaConfig);
+              if (result.embedding && result.embedding.length > 0) {
+                store.store(filePath, result.embedding, contentHash, {
+                  indexedAt: new Date().toISOString(),
+                  chunked: false
+                }, null, content);  // Pass content for FTS
+                indexedSections++;
+                indexedFiles++;
+              }
               continue;
             }
 
-            // Generate embedding
-            const result = await generateEmbedding(content, ollamaConfig);
-
-            // Skip if embedding generation failed or returned empty
-            if (!result.embedding || result.embedding.length === 0) {
-              console.error(`[mcp-obsidian] Empty embedding for ${filePath}, skipping`);
-              skipped++;
-              continue;
+            // Delete old embeddings for this file before re-indexing sections
+            if (args.force) {
+              store.delete(filePath);
             }
 
-            // Store embedding
-            store.store(filePath, result.embedding, contentHash, {
-              indexedAt: new Date().toISOString()
-            });
+            let fileIndexed = false;
 
-            indexed++;
+            // Index each section separately
+            for (const section of sections) {
+              // Skip very short sections
+              if (section.content.length < 20 && !section.heading) {
+                continue;
+              }
+
+              // Create section content with heading for context
+              const sectionText = section.heading
+                ? `${section.heading}\n\n${section.content}`
+                : section.content;
+
+              const sectionHash = hashContent(sectionText);
+
+              // Skip if this section is unchanged
+              if (!args.force && store.isUpToDate(filePath, sectionHash, section.blockId)) {
+                continue;
+              }
+
+              // Generate embedding for section
+              const result = await generateEmbedding(sectionText, ollamaConfig);
+
+              if (!result.embedding || result.embedding.length === 0) {
+                continue;
+              }
+
+              // Store with blockId for section-level tracking
+              store.store(filePath, result.embedding, sectionHash, {
+                indexedAt: new Date().toISOString(),
+                heading: section.heading,
+                level: section.level,
+                startLine: section.startLine,
+                chunked: true
+              }, section.blockId, sectionText);  // Pass content for FTS
+
+              indexedSections++;
+              fileIndexed = true;
+            }
+
+            if (fileIndexed) {
+              indexedFiles++;
+            }
 
             // Log progress every 10 files
-            if (indexed % 10 === 0) {
-              console.error(`[mcp-obsidian] Indexed ${indexed} files...`);
+            if (indexedFiles > 0 && indexedFiles % 10 === 0) {
+              console.error(`[mcp-obsidian] Indexed ${indexedFiles} files (${indexedSections} sections)...`);
             }
           } catch (err) {
             console.error(`[mcp-obsidian] Error indexing ${filePath}:`, err);
@@ -294,7 +492,8 @@ export function createSemanticHandlers(config: Config) {
           content: [{
             type: 'text',
             text: JSON.stringify({
-              indexed,
+              indexedFiles,
+              indexedSections,
               skipped,
               errors,
               totalFiles: files.length
@@ -325,15 +524,53 @@ export function createSemanticHandlers(config: Config) {
         const absolutePath = path.join(vault.path, args.path);
 
         const content = await fs.readFile(absolutePath, 'utf-8');
-        const contentHash = hashContent(content);
 
-        // Generate embedding
-        const result = await generateEmbedding(content, ollamaConfig);
+        // Delete old embeddings for this file
+        store.delete(args.path);
 
-        // Store embedding
-        store.store(args.path, result.embedding, contentHash, {
-          indexedAt: new Date().toISOString()
-        });
+        // Extract sections for heading-based chunking
+        const sections = extractSections(content.trim());
+
+        let indexedSections = 0;
+
+        if (sections.length === 0) {
+          // No headings - index whole file
+          const contentHash = hashContent(content);
+          const result = await generateEmbedding(content, ollamaConfig);
+
+          if (result.embedding && result.embedding.length > 0) {
+            store.store(args.path, result.embedding, contentHash, {
+              indexedAt: new Date().toISOString(),
+              chunked: false
+            }, null, content);  // Pass content for FTS
+            indexedSections = 1;
+          }
+        } else {
+          // Index each section
+          for (const section of sections) {
+            if (section.content.length < 20 && !section.heading) {
+              continue;
+            }
+
+            const sectionText = section.heading
+              ? `${section.heading}\n\n${section.content}`
+              : section.content;
+
+            const sectionHash = hashContent(sectionText);
+            const result = await generateEmbedding(sectionText, ollamaConfig);
+
+            if (result.embedding && result.embedding.length > 0) {
+              store.store(args.path, result.embedding, sectionHash, {
+                indexedAt: new Date().toISOString(),
+                heading: section.heading,
+                level: section.level,
+                startLine: section.startLine,
+                chunked: true
+              }, section.blockId, sectionText);  // Pass content for FTS
+              indexedSections++;
+            }
+          }
+        }
 
         return {
           content: [{
@@ -341,7 +578,7 @@ export function createSemanticHandlers(config: Config) {
             text: JSON.stringify({
               indexed: true,
               path: args.path,
-              embeddingDimensions: result.embedding.length
+              sections: indexedSections
             }, null, 2)
           }],
           isError: false

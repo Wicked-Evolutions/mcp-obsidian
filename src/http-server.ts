@@ -83,7 +83,7 @@ export function createHttpServer(options: HttpServerOptions) {
   // Semantic search (legacy)
   app.post('/search', async (req: Request, res: Response) => {
     try {
-      const { query, limit = 10, minSimilarity = 0.5 } = req.body;
+      const { query, limit = 10, minSimilarity = 0.5, expand = false } = req.body;
 
       if (!query) {
         return res.status(400).json({ error: 'query is required' });
@@ -92,7 +92,8 @@ export function createHttpServer(options: HttpServerOptions) {
       const result = await allHandlers.semantic_search({
         query,
         limit,
-        minSimilarity
+        minSimilarity,
+        expand
       });
 
       if (result.isError) {

@@ -294,3 +294,110 @@ export async function replaceSection(
 
   return { success: true };
 }
+
+/**
+ * Section extracted from markdown for chunking
+ */
+export interface ExtractedSection {
+  heading: string;      // Full heading text with # prefix
+  level: number;        // 1-6 for h1-h6
+  content: string;      // Section content without heading
+  blockId: string;      // Slugified heading for unique ID
+  startLine: number;    // Line number where section starts
+}
+
+/**
+ * Convert heading text to a URL-safe block ID
+ */
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')  // Remove special chars
+    .replace(/\s+/g, '-')       // Spaces to hyphens
+    .replace(/-+/g, '-')        // Collapse multiple hyphens
+    .trim();
+}
+
+/**
+ * Extract all sections from markdown content for chunking
+ * Each section includes its heading and content until the next heading of same or higher level
+ */
+export function extractSections(content: string): ExtractedSection[] {
+  const sections: ExtractedSection[] = [];
+  const lines = content.split('\n');
+
+  // Regex to match markdown headings
+  const headingRegex = /^(#{1,6})\s+(.+)$/;
+
+  let currentSection: {
+    heading: string;
+    level: number;
+    blockId: string;
+    startLine: number;
+    contentLines: string[];
+  } | null = null;
+
+  // Track leading content before first heading (preamble)
+  const preambleLines: string[] = [];
+  let foundFirstHeading = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const match = line.match(headingRegex);
+
+    if (match) {
+      foundFirstHeading = true;
+      const level = match[1].length;
+      const headingText = match[2].trim();
+
+      // Save previous section if exists
+      if (currentSection) {
+        sections.push({
+          heading: currentSection.heading,
+          level: currentSection.level,
+          content: currentSection.contentLines.join('\n').trim(),
+          blockId: currentSection.blockId,
+          startLine: currentSection.startLine
+        });
+      }
+
+      // Start new section
+      currentSection = {
+        heading: line,
+        level,
+        blockId: slugify(headingText),
+        startLine: i + 1,  // 1-indexed
+        contentLines: []
+      };
+    } else if (currentSection) {
+      currentSection.contentLines.push(line);
+    } else if (!foundFirstHeading) {
+      preambleLines.push(line);
+    }
+  }
+
+  // Don't forget the last section
+  if (currentSection) {
+    sections.push({
+      heading: currentSection.heading,
+      level: currentSection.level,
+      content: currentSection.contentLines.join('\n').trim(),
+      blockId: currentSection.blockId,
+      startLine: currentSection.startLine
+    });
+  }
+
+  // Add preamble as special section if it has meaningful content
+  const preambleContent = preambleLines.join('\n').trim();
+  if (preambleContent.length > 50) {  // Only if substantial
+    sections.unshift({
+      heading: '',
+      level: 0,
+      content: preambleContent,
+      blockId: '_preamble',
+      startLine: 1
+    });
+  }
+
+  return sections;
+}

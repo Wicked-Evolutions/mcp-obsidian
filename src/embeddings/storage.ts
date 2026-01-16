@@ -43,35 +43,98 @@ export class EmbeddingStorage {
    * Initialize database schema
    */
   private initialize(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS embeddings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        file_path TEXT NOT NULL,
-        block_id TEXT,
-        content_hash TEXT NOT NULL,
-        embedding BLOB NOT NULL,
-        metadata TEXT,
-        updated_at INTEGER NOT NULL,
-        UNIQUE(file_path, block_id)
-      );
+    // Check if we need to migrate from old schema
+    const tableExists = this.db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='embeddings'"
+    ).get();
 
-      CREATE INDEX IF NOT EXISTS idx_file_path ON embeddings(file_path);
-      CREATE INDEX IF NOT EXISTS idx_content_hash ON embeddings(content_hash);
-      CREATE INDEX IF NOT EXISTS idx_updated_at ON embeddings(updated_at);
+    if (tableExists) {
+      // Migration: clean up duplicates from old schema bug
+      // The old UNIQUE(file_path, block_id) didn't work with NULLs
+      this.db.exec(`
+        DELETE FROM embeddings WHERE id NOT IN (
+          SELECT MIN(id) FROM embeddings
+          GROUP BY file_path, COALESCE(block_id, '')
+        );
+      `);
+
+      // Check if we need to add the new unique index
+      const hasNewIndex = this.db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_unique_file_block'"
+      ).get();
+
+      if (!hasNewIndex) {
+        // Drop old constraint by recreating table (SQLite limitation)
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS embeddings_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_path TEXT NOT NULL,
+            block_id TEXT DEFAULT '',
+            content_hash TEXT NOT NULL,
+            embedding BLOB NOT NULL,
+            metadata TEXT,
+            updated_at INTEGER NOT NULL
+          );
+
+          INSERT INTO embeddings_new (id, file_path, block_id, content_hash, embedding, metadata, updated_at)
+          SELECT id, file_path, COALESCE(block_id, ''), content_hash, embedding, metadata, updated_at
+          FROM embeddings;
+
+          DROP TABLE embeddings;
+          ALTER TABLE embeddings_new RENAME TO embeddings;
+
+          CREATE UNIQUE INDEX idx_unique_file_block ON embeddings(file_path, block_id);
+          CREATE INDEX IF NOT EXISTS idx_file_path ON embeddings(file_path);
+          CREATE INDEX IF NOT EXISTS idx_content_hash ON embeddings(content_hash);
+          CREATE INDEX IF NOT EXISTS idx_updated_at ON embeddings(updated_at);
+        `);
+        console.error('[mcp-obsidian] Migrated embeddings table to fix duplicate bug');
+      }
+    } else {
+      // Fresh install - create with correct schema
+      this.db.exec(`
+        CREATE TABLE embeddings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          file_path TEXT NOT NULL,
+          block_id TEXT DEFAULT '',
+          content_hash TEXT NOT NULL,
+          embedding BLOB NOT NULL,
+          metadata TEXT,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE UNIQUE INDEX idx_unique_file_block ON embeddings(file_path, block_id);
+        CREATE INDEX idx_file_path ON embeddings(file_path);
+        CREATE INDEX idx_content_hash ON embeddings(content_hash);
+        CREATE INDEX idx_updated_at ON embeddings(updated_at);
+      `);
+    }
+
+    // Create FTS5 table for keyword search (hybrid search)
+    this.db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS content_fts USING fts5(
+        file_path,
+        block_id,
+        content,
+        tokenize='porter unicode61'
+      );
     `);
   }
 
   /**
-   * Store an embedding
+   * Store an embedding (and optionally content for FTS)
    */
   store(
     filePath: string,
     embedding: number[],
     contentHash: string,
     metadata: Record<string, unknown> = {},
-    blockId: string | null = null
+    blockId: string | null = null,
+    content?: string  // Optional content for FTS indexing
   ): void {
     const embeddingBlob = Buffer.from(new Float32Array(embedding).buffer);
+    // Use empty string instead of NULL to make UNIQUE constraint work
+    const normalizedBlockId = blockId || '';
 
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO embeddings (file_path, block_id, content_hash, embedding, metadata, updated_at)
@@ -80,26 +143,40 @@ export class EmbeddingStorage {
 
     stmt.run(
       filePath,
-      blockId,
+      normalizedBlockId,
       contentHash,
       embeddingBlob,
       JSON.stringify(metadata),
       Date.now()
     );
+
+    // Also store in FTS if content provided
+    if (content) {
+      // Delete existing FTS entry first
+      this.db.prepare(`
+        DELETE FROM content_fts WHERE file_path = ? AND block_id = ?
+      `).run(filePath, normalizedBlockId);
+
+      this.db.prepare(`
+        INSERT INTO content_fts (file_path, block_id, content)
+        VALUES (?, ?, ?)
+      `).run(filePath, normalizedBlockId, content);
+    }
   }
 
   /**
    * Get embedding for a file
    */
   get(filePath: string, blockId: string | null = null): StoredEmbedding | null {
+    const normalizedBlockId = blockId || '';
     const stmt = this.db.prepare(`
-      SELECT * FROM embeddings WHERE file_path = ? AND (block_id = ? OR (block_id IS NULL AND ? IS NULL))
+      SELECT * FROM embeddings WHERE file_path = ? AND block_id = ?
     `);
 
-    const row = stmt.get(filePath, blockId, blockId) as {
+    const row = stmt.get(filePath, normalizedBlockId) as {
       id: number;
       file_path: string;
-      block_id: string | null;
+      block_id: string;
       content_hash: string;
       embedding: Buffer;
       metadata: string;
@@ -111,7 +188,7 @@ export class EmbeddingStorage {
     return {
       id: row.id,
       filePath: row.file_path,
-      blockId: row.block_id,
+      blockId: row.block_id || null,  // Return null for empty string for API consistency
       contentHash: row.content_hash,
       embedding: Array.from(new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.length / 4)),
       metadata: JSON.parse(row.metadata || '{}'),
@@ -123,12 +200,13 @@ export class EmbeddingStorage {
    * Check if embedding exists and is up to date
    */
   isUpToDate(filePath: string, contentHash: string, blockId: string | null = null): boolean {
+    const normalizedBlockId = blockId || '';
     const stmt = this.db.prepare(`
       SELECT content_hash FROM embeddings
-      WHERE file_path = ? AND (block_id = ? OR (block_id IS NULL AND ? IS NULL))
+      WHERE file_path = ? AND block_id = ?
     `);
 
-    const row = stmt.get(filePath, blockId, blockId) as { content_hash: string } | undefined;
+    const row = stmt.get(filePath, normalizedBlockId) as { content_hash: string } | undefined;
     return row?.content_hash === contentHash;
   }
 
@@ -136,8 +214,8 @@ export class EmbeddingStorage {
    * Delete embeddings for a file
    */
   delete(filePath: string): void {
-    const stmt = this.db.prepare('DELETE FROM embeddings WHERE file_path = ?');
-    stmt.run(filePath);
+    this.db.prepare('DELETE FROM embeddings WHERE file_path = ?').run(filePath);
+    this.db.prepare('DELETE FROM content_fts WHERE file_path = ?').run(filePath);
   }
 
   /**
@@ -145,6 +223,7 @@ export class EmbeddingStorage {
    */
   clear(): void {
     this.db.exec('DELETE FROM embeddings');
+    this.db.exec('DELETE FROM content_fts');
   }
 
   /**
@@ -157,7 +236,7 @@ export class EmbeddingStorage {
     const rows = stmt.all() as Array<{
       id: number;
       file_path: string;
-      block_id: string | null;
+      block_id: string;
       content_hash: string;
       embedding: Buffer;
       metadata: string;
@@ -167,7 +246,7 @@ export class EmbeddingStorage {
     return rows.map(row => ({
       id: row.id,
       filePath: row.file_path,
-      blockId: row.block_id,
+      blockId: row.block_id || null,  // Return null for empty string for API consistency
       contentHash: row.content_hash,
       embedding: Array.from(new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.length / 4)),
       metadata: JSON.parse(row.metadata || '{}'),
@@ -176,7 +255,7 @@ export class EmbeddingStorage {
   }
 
   /**
-   * Search for similar embeddings
+   * Search for similar embeddings (semantic search)
    */
   search(queryEmbedding: number[], limit: number = 10, minSimilarity: number = 0): SearchResult[] {
     const allEmbeddings = this.getAll();
@@ -193,6 +272,42 @@ export class EmbeddingStorage {
       .slice(0, limit);
 
     return results;
+  }
+
+  /**
+   * Keyword search result
+   */
+  keywordSearch(query: string, limit: number = 10): Array<{
+    filePath: string;
+    blockId: string | null;
+    score: number;
+  }> {
+    try {
+      // FTS5 MATCH query - escape special characters
+      const sanitizedQuery = query.replace(/['"]/g, '').trim();
+      if (!sanitizedQuery) return [];
+
+      const rows = this.db.prepare(`
+        SELECT file_path, block_id, bm25(content_fts) as score
+        FROM content_fts
+        WHERE content_fts MATCH ?
+        ORDER BY score
+        LIMIT ?
+      `).all(sanitizedQuery, limit) as Array<{
+        file_path: string;
+        block_id: string;
+        score: number;
+      }>;
+
+      return rows.map(row => ({
+        filePath: row.file_path,
+        blockId: row.block_id || null,
+        score: Math.abs(row.score)  // BM25 returns negative scores, lower is better
+      }));
+    } catch {
+      // FTS query syntax error - return empty
+      return [];
+    }
   }
 
   /**
