@@ -77,19 +77,109 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 | `HTTP_MODE` | Run as HTTP server instead of MCP | `false` |
 | `HTTP_PORT` | Port for HTTP server | `3456` |
 
-## Semantic Search Setup
+## Ollama Setup (Required for Semantic Search)
 
-1. Install Ollama: https://ollama.ai/
-2. Pull the embedding model:
-   ```bash
-   ollama pull nomic-embed-text
-   ```
-3. (Optional) Pull a model for query expansion:
-   ```bash
-   ollama pull qwen2.5:7b
-   ```
+Semantic search requires [Ollama](https://ollama.ai/) running locally to generate embeddings.
 
-The first time you run semantic search, the vault will be indexed. This creates embeddings for each section (split by headings) and stores them in a local SQLite database.
+### 1. Install Ollama
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install ollama
+
+# Or download from https://ollama.ai/download
+```
+
+**Linux:**
+```bash
+curl -fsSL https://ollama.ai/install.sh | sh
+```
+
+**Windows:**
+Download from https://ollama.ai/download
+
+### 2. Start Ollama
+
+```bash
+# Start the Ollama service (runs on port 11434 by default)
+ollama serve
+```
+
+On macOS, Ollama runs automatically after installation. Check with:
+```bash
+curl http://localhost:11434/api/tags
+```
+
+### 3. Pull Required Models
+
+**Embedding model (required):**
+```bash
+ollama pull nomic-embed-text
+```
+
+This model generates 768-dimensional vectors for semantic similarity. It's ~274MB.
+
+**Query expansion model (optional but recommended):**
+```bash
+ollama pull qwen2.5:7b
+```
+
+This enables query expansion which improves search recall. It's ~4.7GB.
+
+### 4. Verify Setup
+
+```bash
+# Check Ollama is running
+curl http://localhost:11434/api/tags
+
+# Test embedding generation
+curl http://localhost:11434/api/embeddings \
+  -d '{"model": "nomic-embed-text", "prompt": "Hello world"}'
+```
+
+You should see a response with an `embedding` array of 768 numbers.
+
+### 5. First-Time Indexing
+
+The first time you use semantic search, the vault needs to be indexed:
+
+```bash
+# Via HTTP server
+HTTP_MODE=true node dist/index.js &
+curl http://localhost:3456/call \
+  -H "Content-Type: application/json" \
+  -d '{"tool": "index_vault", "args": {}}'
+```
+
+Or via Claude Desktop, just call the `index_vault` tool.
+
+Indexing creates:
+- Vector embeddings for each section (split by markdown headings)
+- Full-text search index for keyword matching
+- SQLite database stored alongside your vault
+
+### Troubleshooting
+
+**"Ollama embedding failed: 500"**
+- Check Ollama is running: `curl http://localhost:11434/api/tags`
+- Ensure model is pulled: `ollama list`
+- Restart Ollama: `ollama serve`
+
+**"Model not found"**
+```bash
+ollama pull nomic-embed-text
+```
+
+**Slow indexing**
+- Initial indexing of large vaults takes time (1-2 sections/second)
+- Subsequent runs only index changed files
+- Consider running indexing overnight for large vaults
+
+**Memory issues**
+- nomic-embed-text uses ~500MB RAM
+- qwen2.5:7b uses ~5GB RAM (only loaded during query expansion)
+- Close other apps if needed
 
 ## Available Tools
 
