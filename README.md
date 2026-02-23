@@ -1,22 +1,22 @@
 # MCP Obsidian
 
-A Model Context Protocol (MCP) server for Obsidian vault integration with Claude. Provides file operations, semantic search with local embeddings, and section-level editing capabilities.
+A Model Context Protocol (MCP) server for Obsidian vault integration with Claude. Provides file operations, wikilink resolution, semantic search, frontmatter queries, vault analytics, and section-level editing — all from a single unified multi-vault server.
 
 ## Features
 
-- **File Operations**: List, read, write, create, and search files in Obsidian vaults
-- **Semantic Search**: Vector-based similarity search using Ollama embeddings
-  - Hybrid search (semantic + keyword matching)
-  - Query expansion for better recall
-  - Heading-based chunking for precise results
-- **Section Editing**: Read and update specific sections by heading
-- **Multi-Vault Support**: Manage multiple vaults from a single server
-- **Auto-Indexing**: File watcher automatically indexes new/changed files
+- **Unified Multi-Vault**: Single server process handles all vaults. Every tool accepts an optional `vault` parameter for per-request routing.
+- **File Operations**: List, read, create, update, delete, move files with frontmatter support
+- **Wikilink Resolution**: Resolve `[[wikilinks]]`, get outlinks/backlinks, follow link chains
+- **Semantic Search**: Vector-based similarity search using Ollama embeddings (hybrid semantic + keyword)
+- **Frontmatter Queries**: Dataview-like query engine — filter by type, status, tags, or any field
+- **Vault Analytics**: Health reports, orphan detection, broken link detection, stale note detection
+- **Section Editing**: Append, prepend, or replace content within specific markdown sections
+- **Cross-Vault Search**: Search across all vaults simultaneously
 
 ## Prerequisites
 
 - Node.js 18+
-- [Ollama](https://ollama.ai/) running locally (for semantic search)
+- [Ollama](https://ollama.ai/) running locally (for semantic search only)
 - Obsidian vault(s)
 
 ## Installation
@@ -30,9 +30,30 @@ npm run build
 
 ## Configuration
 
-### For Claude Desktop
+### Single Server, Multiple Vaults (Recommended)
 
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "obsidian": {
+      "command": "node",
+      "args": ["/path/to/mcp-obsidian/dist/index.js"],
+      "env": {
+        "OBSIDIAN_VAULTS": "{\"Platform\":\"/path/to/vault1\",\"Helena\":\"/path/to/vault2\",\"Finding\":\"/path/to/vault3\"}"
+      }
+    }
+  }
+}
+```
+
+Then use the `vault` parameter on any tool call:
+```json
+{ "tool": "read_file", "args": { "vault": "Helena", "path": "my-note.md" } }
+```
+
+Omitting `vault` defaults to the first vault in the list.
+
+### Single Vault
 
 ```json
 {
@@ -49,185 +70,151 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 }
 ```
 
-### Multi-Vault Configuration
-
-```json
-{
-  "mcpServers": {
-    "obsidian-ecosystem": {
-      "command": "node",
-      "args": ["/path/to/mcp-obsidian/dist/index.js"],
-      "env": {
-        "OBSIDIAN_VAULTS": "{\"vault1\":\"/path/to/vault1\",\"vault2\":\"/path/to/vault2\"}"
-      }
-    }
-  }
-}
-```
-
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OBSIDIAN_VAULT_PATH` | Path to single vault | - |
-| `OBSIDIAN_VAULT_NAME` | Display name for vault | - |
-| `OBSIDIAN_VAULTS` | JSON object for multi-vault mode | - |
+| `OBSIDIAN_VAULTS` | JSON object: `{"name":"path",...}` for multi-vault | - |
+| `OBSIDIAN_VAULT_PATH` | Path to single vault (alternative to OBSIDIAN_VAULTS) | - |
+| `OBSIDIAN_VAULT_NAME` | Display name for single vault | - |
 | `OLLAMA_HOST` | Ollama API endpoint | `http://localhost:11434` |
 | `OLLAMA_EMBEDDING_MODEL` | Model for embeddings | `nomic-embed-text` |
 | `HTTP_MODE` | Run as HTTP server instead of MCP | `false` |
 | `HTTP_PORT` | Port for HTTP server | `3456` |
 
-## Ollama Setup (Required for Semantic Search)
+## Available Tools (33)
 
-Semantic search requires [Ollama](https://ollama.ai/) running locally to generate embeddings.
-
-### 1. Install Ollama
-
-**macOS:**
-```bash
-# Using Homebrew
-brew install ollama
-
-# Or download from https://ollama.ai/download
-```
-
-**Linux:**
-```bash
-curl -fsSL https://ollama.ai/install.sh | sh
-```
-
-**Windows:**
-Download from https://ollama.ai/download
-
-### 2. Start Ollama
-
-```bash
-# Start the Ollama service (runs on port 11434 by default)
-ollama serve
-```
-
-On macOS, Ollama runs automatically after installation. Check with:
-```bash
-curl http://localhost:11434/api/tags
-```
-
-### 3. Pull Required Models
-
-**Embedding model (required):**
-```bash
-ollama pull nomic-embed-text
-```
-
-This model generates 768-dimensional vectors for semantic similarity. It's ~274MB.
-
-**Query expansion model (optional but recommended):**
-```bash
-ollama pull qwen2.5:7b
-```
-
-This enables query expansion which improves search recall. It's ~4.7GB.
-
-### 4. Verify Setup
-
-```bash
-# Check Ollama is running
-curl http://localhost:11434/api/tags
-
-# Test embedding generation
-curl http://localhost:11434/api/embeddings \
-  -d '{"model": "nomic-embed-text", "prompt": "Hello world"}'
-```
-
-You should see a response with an `embedding` array of 768 numbers.
-
-### 5. First-Time Indexing
-
-The first time you use semantic search, the vault needs to be indexed:
-
-```bash
-# Via HTTP server
-HTTP_MODE=true node dist/index.js &
-curl http://localhost:3456/call \
-  -H "Content-Type: application/json" \
-  -d '{"tool": "index_vault", "args": {}}'
-```
-
-Or via Claude Desktop, just call the `index_vault` tool.
-
-Indexing creates:
-- Vector embeddings for each section (split by markdown headings)
-- Full-text search index for keyword matching
-- SQLite database stored alongside your vault
-
-### Troubleshooting
-
-**"Ollama embedding failed: 500"**
-- Check Ollama is running: `curl http://localhost:11434/api/tags`
-- Ensure model is pulled: `ollama list`
-- Restart Ollama: `ollama serve`
-
-**"Model not found"**
-```bash
-ollama pull nomic-embed-text
-```
-
-**Slow indexing**
-- Initial indexing of large vaults takes time (1-2 sections/second)
-- Subsequent runs only index changed files
-- Consider running indexing overnight for large vaults
-
-**Memory issues**
-- nomic-embed-text uses ~500MB RAM
-- qwen2.5:7b uses ~5GB RAM (only loaded during query expansion)
-- Close other apps if needed
-
-## Available Tools
-
-### File Operations
+### File Operations (9)
 
 | Tool | Description |
 |------|-------------|
-| `list_files` | List all markdown files in vault |
-| `read_file` | Read contents of a file |
-| `write_file` | Overwrite file contents |
-| `create_file` | Create a new file |
-| `search_files` | Search files by pattern |
+| `list_files` | List all markdown files in a vault |
+| `read_file` | Read file contents with frontmatter |
+| `create_file` | Create a new file with optional frontmatter |
+| `update_file` | Overwrite file contents |
+| `delete_file` | Delete a file |
+| `get_frontmatter` | Read only frontmatter metadata |
+| `update_frontmatter` | Merge updates into frontmatter |
+| `search_content` | Full-text search across files |
+| `move_note` | Relocate a file and update all wikilinks pointing to it |
 
-### Section Operations
+### Wikilink Operations (5)
 
 | Tool | Description |
 |------|-------------|
-| `read_section` | Read a specific section by heading |
-| `update_section` | Update content under a heading |
+| `resolve_wikilink` | Resolve a `[[wikilink]]` to its file path |
+| `get_outlinks` | Get all wikilinks from a note |
+| `get_backlinks` | Get all notes that link to a given note |
+| `follow_link` | Resolve a wikilink and read the target file |
+| `rebuild_link_index` | Rebuild the wikilink resolution index |
 
-### Semantic Search
+### Semantic Search (5)
 
 | Tool | Description |
 |------|-------------|
 | `semantic_search` | Find similar content using embeddings |
-| `index_vault` | Reindex all files in vault |
+| `index_vault` | Index all files in a vault for search |
 | `index_file` | Index a single file |
+| `get_similar` | Find notes similar to a given note |
+| `index_status` | Check indexing status and stats |
 
-### Semantic Search Parameters
+### Frontmatter Queries (1)
 
-```typescript
-semantic_search({
-  query: "how to start a session",  // Search query
-  limit: 10,                         // Max results (default: 10)
-  minSimilarity: 0.5,               // Minimum similarity threshold (default: 0.5)
-  expand: true                       // Use query expansion (default: false)
-})
+| Tool | Description |
+|------|-------------|
+| `query_notes` | Dataview-like query engine for frontmatter fields |
+
+Filter operators: `equals`, `not_equals`, `contains`, `not_contains`, `in`, `not_in`, `exists`, `not_exists`, `greater_than`, `less_than`
+
+Example:
+```json
+{
+  "tool": "query_notes",
+  "args": {
+    "vault": "Helena",
+    "from": "03 Projects",
+    "where": [
+      { "field": "type", "op": "equals", "value": "PROJECT" },
+      { "field": "status", "op": "not_equals", "value": "archived" }
+    ],
+    "fields": ["type", "status", "updated"],
+    "sort_by": "-updated",
+    "limit": 10
+  }
+}
 ```
 
-## HTTP Server Mode
+### Vault Analytics (4)
 
-For testing or integration with other tools, run as an HTTP server:
+| Tool | Description |
+|------|-------------|
+| `get_vault_health` | Composite health report (orphans + broken links + stale notes) |
+| `get_orphan_notes` | Find notes with zero inbound wikilinks |
+| `get_broken_links` | Find wikilinks pointing to non-existent notes |
+| `get_stale_notes` | Find notes not modified within N days |
+
+### Section Editing (3)
+
+| Tool | Description |
+|------|-------------|
+| `append_to_section` | Add content to the end of a section |
+| `prepend_to_section` | Add content to the beginning of a section |
+| `update_section` | Replace all content within a section |
+
+### Cross-Vault (6)
+
+| Tool | Description |
+|------|-------------|
+| `search_all_vaults` | Search across all configured vaults |
+| `semantic_search_all` | Semantic search across all vaults |
+| `find_note_by_name` | Find a note by name across vaults |
+| `get_ecosystem_stats` | Stats for all vaults |
+| `get_cross_vault_links` | Find wikilinks between vaults |
+
+## Ollama Setup (Required for Semantic Search)
+
+Semantic search requires [Ollama](https://ollama.ai/) running locally. All other tools work without Ollama.
+
+### Quick Setup
+
+```bash
+# Install (macOS)
+brew install ollama
+
+# Pull embedding model (~274MB)
+ollama pull nomic-embed-text
+
+# Optional: query expansion model (~4.7GB)
+ollama pull qwen2.5:7b
+
+# Verify
+curl http://localhost:11434/api/tags
+```
+
+### First-Time Indexing
+
+Call `index_vault` via Claude or HTTP server:
+
+```bash
+HTTP_MODE=true node dist/index.js &
+curl http://localhost:3456/call \
+  -H "Content-Type: application/json" \
+  -d '{"tool": "index_vault", "args": {"vault": "MyVault"}}'
+```
+
+Indexing creates heading-based chunks with vector embeddings (768d) and FTS5 full-text index, stored in SQLite alongside your vault.
+
+### Troubleshooting
+
+- **"Ollama embedding failed: 500"**: Check `curl http://localhost:11434/api/tags`, ensure model is pulled
+- **Slow indexing**: Initial run processes 1-2 sections/second. Subsequent runs only index changed files.
+- **Memory**: nomic-embed-text uses ~500MB RAM; qwen2.5:7b uses ~5GB (only loaded during query expansion)
+
+## HTTP Server Mode
 
 ```bash
 HTTP_MODE=true HTTP_PORT=3456 node dist/index.js
 ```
-
-Endpoints:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -236,67 +223,42 @@ Endpoints:
 | `/call` | POST | Call any tool |
 | `/search` | POST | Semantic search shorthand |
 
-Example:
-```bash
-curl http://localhost:3456/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "project notes", "limit": 5, "expand": true}'
-```
-
-## How Semantic Search Works
-
-1. **Indexing**: Files are split by headings into sections. Each section gets:
-   - A vector embedding (768 dimensions via nomic-embed-text)
-   - Full-text search index (FTS5 with BM25 scoring)
-
-2. **Hybrid Search**: Queries use both:
-   - Semantic similarity (70% weight) - finds conceptually similar content
-   - Keyword matching (30% weight) - finds exact term matches
-
-3. **Query Expansion** (optional): Uses a local LLM to generate alternative phrasings, improving recall for ambiguous queries.
-
-4. **Results**: Returns file path, section heading, and similarity score.
-
-## Development
-
-```bash
-# Build
-npm run build
-
-# Watch mode
-npm run watch
-
-# Run HTTP server for testing
-HTTP_MODE=true npm start
-```
-
 ## Architecture
 
 ```
 src/
-├── index.ts           # Entry point, MCP server setup
-├── http-server.ts     # HTTP server mode
-├── config.ts          # Configuration loading
-├── watcher.ts         # File system watcher
+├── index.ts              # Entry point, MCP server setup
+├── http-server.ts        # HTTP server mode
+├── config.ts             # Config loading + resolveVault() helper
 ├── parsers/
-│   └── markdown.ts    # Markdown parsing, section extraction
+│   ├── markdown.ts       # Markdown/frontmatter parsing, section extraction
+│   └── wikilink.ts       # Wikilink parsing + resolution
 ├── embeddings/
-│   ├── ollama.ts      # Ollama API client
-│   └── storage.ts     # SQLite vector storage
+│   ├── ollama.ts         # Ollama API client
+│   ├── storage.ts        # SQLite vector storage
+│   └── watcher.ts        # File watcher for auto-indexing
 └── tools/
-    ├── files.ts       # File operation handlers
-    ├── sections.ts    # Section editing handlers
-    └── semantic.ts    # Semantic search handlers
+    ├── index.ts          # Tool registration hub
+    ├── files.ts          # File ops (9 tools)
+    ├── wikilinks.ts      # Wikilink ops (5 tools)
+    ├── semantic.ts       # Semantic search (5 tools)
+    ├── crossvault.ts     # Cross-vault ops (6 tools)
+    ├── sections.ts       # Section editing (3 tools)
+    ├── query.ts          # Frontmatter queries (1 tool)
+    └── analytics.ts      # Vault health (4 tools)
 ```
 
-## Database
+## Changelog
 
-Embeddings are stored in SQLite at `data/embeddings.db`:
+### v2.0.0 (2026-02-23)
+- **Unified multi-vault server**: All tools accept optional `vault` parameter for per-request vault routing. Eliminates need for separate server processes per vault.
+- **New tools**: `query_notes`, `get_vault_health`, `get_orphan_notes`, `get_broken_links`, `get_stale_notes`, `move_note`
+- **Per-vault caching**: Wikilink index and semantic storage are now vault-isolated
+- Total tools: 33
 
-- `embeddings` table: Vector embeddings as binary blobs
-- `content_fts` table: FTS5 full-text search index
-
-The database is created automatically on first run.
+### v1.0.0 (2026-01-16)
+- Initial release: file ops, wikilinks, semantic search, cross-vault, section editing
+- 27 tools across 5 modules
 
 ## License
 
