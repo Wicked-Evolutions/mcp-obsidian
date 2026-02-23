@@ -7,7 +7,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { Config, getPrimaryVault } from '../config.js';
+import { Config, resolveVault } from '../config.js';
 import { ToolResponse } from '../types/index.js';
 import { parseMarkdownFile, extractTitle, extractSections } from '../parsers/markdown.js';
 import {
@@ -17,18 +17,18 @@ import {
 } from '../embeddings/ollama.js';
 import { EmbeddingStorage } from '../embeddings/storage.js';
 
-// Storage instance (lazy initialized)
-let storage: EmbeddingStorage | null = null;
+// Per-vault storage instances (lazy initialized)
+const storageMap = new Map<string, EmbeddingStorage>();
 
 /**
- * Get or create storage instance
+ * Get or create storage instance for a vault
  */
 function getStorage(vaultPath: string): EmbeddingStorage {
-  if (!storage) {
+  if (!storageMap.has(vaultPath)) {
     const dbPath = path.join(vaultPath, '.mcp-obsidian', 'embeddings.db');
-    storage = new EmbeddingStorage(dbPath);
+    storageMap.set(vaultPath, new EmbeddingStorage(dbPath));
   }
-  return storage;
+  return storageMap.get(vaultPath)!;
 }
 
 /**
@@ -79,6 +79,12 @@ Alternative queries:`,
   }
 }
 
+// Vault parameter definition
+const vaultParam = {
+  type: 'string' as const,
+  description: 'Vault name (e.g., "Platform", "Helena"). Defaults to first vault if omitted.'
+};
+
 /**
  * Tool definitions for semantic search
  */
@@ -89,6 +95,7 @@ export const semanticTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         query: {
           type: 'string',
           description: 'Natural language query (e.g., "notes about marketing strategy")'
@@ -118,6 +125,7 @@ export const semanticTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         force: {
           type: 'boolean',
           description: 'Re-index all files even if unchanged',
@@ -136,6 +144,7 @@ export const semanticTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the file'
@@ -150,6 +159,7 @@ export const semanticTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the reference file'
@@ -168,7 +178,9 @@ export const semanticTools: Tool[] = [
     description: 'Get status of the semantic search index.',
     inputSchema: {
       type: 'object',
-      properties: {}
+      properties: {
+        vault: vaultParam
+      }
     }
   }
 ];
@@ -177,7 +189,6 @@ export const semanticTools: Tool[] = [
  * Handler functions for semantic tools
  */
 export function createSemanticHandlers(config: Config) {
-  const vault = getPrimaryVault(config);
   const ollamaConfig: OllamaConfig = {
     host: config.ollama.host,
     model: config.ollama.model
@@ -185,12 +196,15 @@ export function createSemanticHandlers(config: Config) {
 
   return {
     semantic_search: async (args: {
+      vault?: string;
       query: string;
       limit?: number;
       minSimilarity?: number;
       expand?: boolean;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
+
         // Check Ollama availability
         const ollama = await checkOllamaAvailability(ollamaConfig);
         if (!ollama.available || !ollama.hasModel) {
@@ -366,10 +380,13 @@ export function createSemanticHandlers(config: Config) {
     },
 
     index_vault: async (args: {
+      vault?: string;
       force?: boolean;
       directory?: string;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
+
         // Check Ollama availability
         const ollama = await checkOllamaAvailability(ollamaConfig);
         if (!ollama.available || !ollama.hasModel) {
@@ -492,6 +509,7 @@ export function createSemanticHandlers(config: Config) {
           content: [{
             type: 'text',
             text: JSON.stringify({
+              vault: vault.name,
               indexedFiles,
               indexedSections,
               skipped,
@@ -509,8 +527,10 @@ export function createSemanticHandlers(config: Config) {
       }
     },
 
-    index_file: async (args: { path: string }): Promise<ToolResponse> => {
+    index_file: async (args: { vault?: string; path: string }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
+
         // Check Ollama availability
         const ollama = await checkOllamaAvailability(ollamaConfig);
         if (!ollama.available || !ollama.hasModel) {
@@ -592,10 +612,12 @@ export function createSemanticHandlers(config: Config) {
     },
 
     get_similar: async (args: {
+      vault?: string;
       path: string;
       limit?: number;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const store = getStorage(vault.path);
 
         // Get embedding for reference file
@@ -669,8 +691,9 @@ export function createSemanticHandlers(config: Config) {
       }
     },
 
-    index_status: async (): Promise<ToolResponse> => {
+    index_status: async (args: { vault?: string }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const store = getStorage(vault.path);
         const stats = store.getStats();
 

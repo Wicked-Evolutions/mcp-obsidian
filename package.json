@@ -1,7 +1,7 @@
 {
   "name": "@influencentricity/mcp-obsidian",
-  "version": "1.0.0",
-  "description": "Obsidian MCP server for Influencentricity ecosystem. Direct filesystem access with wikilink support, backlinks, and semantic search via Ollama embeddings.",
+  "version": "2.0.0",
+  "description": "Unified multi-vault Obsidian MCP server. Direct filesystem access with wikilink support, backlinks, semantic search, frontmatter queries, and vault analytics.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

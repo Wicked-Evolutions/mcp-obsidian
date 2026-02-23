@@ -7,13 +7,19 @@
  */
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { Config, getPrimaryVault } from '../config.js';
+import { Config, resolveVault } from '../config.js';
 import { ToolResponse } from '../types/index.js';
 import {
   appendToSection,
   prependToSection,
   replaceSection
 } from '../parsers/markdown.js';
+
+// Vault parameter definition
+const vaultParam = {
+  type: 'string' as const,
+  description: 'Vault name (e.g., "Platform", "Helena"). Defaults to first vault if omitted.'
+};
 
 /**
  * Tool definitions for section operations
@@ -25,6 +31,7 @@ export const sectionTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the file (e.g., "03 Projects/PROJECT My Project.md")'
@@ -47,6 +54,7 @@ export const sectionTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the file'
@@ -69,6 +77,7 @@ export const sectionTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the file'
@@ -91,15 +100,15 @@ export const sectionTools: Tool[] = [
  * Handler functions for section tools
  */
 export function createSectionHandlers(config: Config) {
-  const vault = getPrimaryVault(config);
-
   return {
     append_to_section: async (args: {
+      vault?: string;
       path: string;
       heading: string;
       content: string;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const result = await appendToSection(
           args.path,
           vault.path,
@@ -135,11 +144,13 @@ export function createSectionHandlers(config: Config) {
     },
 
     prepend_to_section: async (args: {
+      vault?: string;
       path: string;
       heading: string;
       content: string;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const result = await prependToSection(
           args.path,
           vault.path,
@@ -175,11 +186,13 @@ export function createSectionHandlers(config: Config) {
     },
 
     update_section: async (args: {
+      vault?: string;
       path: string;
       heading: string;
       content: string;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const result = await replaceSection(
           args.path,
           vault.path,

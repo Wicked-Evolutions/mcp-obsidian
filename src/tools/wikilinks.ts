@@ -6,7 +6,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { Config, getPrimaryVault } from '../config.js';
+import { Config, resolveVault } from '../config.js';
 import { WikiLink, BacklinkEntry, ToolResponse } from '../types/index.js';
 import { parseMarkdownFile, extractTitle } from '../parsers/markdown.js';
 import {
@@ -17,9 +17,14 @@ import {
   getWikilinkContext
 } from '../parsers/wikilink.js';
 
-// Cache for file index (rebuilt on demand)
-let fileIndexCache: Map<string, string> | null = null;
-let fileIndexVault: string | null = null;
+// Per-vault file index cache
+const fileIndexCaches = new Map<string, Map<string, string>>();
+
+// Vault parameter definition
+const vaultParam = {
+  type: 'string' as const,
+  description: 'Vault name (e.g., "Platform", "Helena"). Defaults to first vault if omitted.'
+};
 
 /**
  * Tool definitions for wikilink operations
@@ -31,6 +36,7 @@ export const wikilinkTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         link: {
           type: 'string',
           description: 'The wikilink target (e.g., "My Note" or "folder/My Note")'
@@ -45,6 +51,7 @@ export const wikilinkTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the file'
@@ -64,6 +71,7 @@ export const wikilinkTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the target file'
@@ -83,6 +91,7 @@ export const wikilinkTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         link: {
           type: 'string',
           description: 'The wikilink to follow (e.g., "My Note" or "folder/My Note")'
@@ -96,31 +105,32 @@ export const wikilinkTools: Tool[] = [
     description: 'Rebuild the internal file index for faster wikilink resolution. Run after adding many files.',
     inputSchema: {
       type: 'object',
-      properties: {}
+      properties: {
+        vault: vaultParam
+      }
     }
   }
 ];
 
 /**
+ * Get or build file index for a specific vault
+ */
+async function getFileIndex(vaultPath: string): Promise<Map<string, string>> {
+  if (!fileIndexCaches.has(vaultPath)) {
+    fileIndexCaches.set(vaultPath, await buildFileIndex(vaultPath));
+  }
+  return fileIndexCaches.get(vaultPath)!;
+}
+
+/**
  * Handler functions for wikilink tools
  */
 export function createWikilinkHandlers(config: Config) {
-  const vault = getPrimaryVault(config);
-
-  // Helper to get or build file index
-  async function getFileIndex(): Promise<Map<string, string>> {
-    if (fileIndexCache && fileIndexVault === vault.path) {
-      return fileIndexCache;
-    }
-    fileIndexCache = await buildFileIndex(vault.path);
-    fileIndexVault = vault.path;
-    return fileIndexCache;
-  }
-
   return {
-    resolve_wikilink: async (args: { link: string }): Promise<ToolResponse> => {
+    resolve_wikilink: async (args: { vault?: string; link: string }): Promise<ToolResponse> => {
       try {
-        const fileIndex = await getFileIndex();
+        const vault = resolveVault(config, args.vault);
+        const fileIndex = await getFileIndex(vault.path);
         const resolved = await resolveWikilink(args.link, vault.path, fileIndex);
 
         if (resolved) {
@@ -158,16 +168,18 @@ export function createWikilinkHandlers(config: Config) {
     },
 
     get_outlinks: async (args: {
+      vault?: string;
       path: string;
       resolveLinks?: boolean;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const parsed = await parseMarkdownFile(args.path, vault.path);
         const links = extractWikilinks(parsed.rawContent);
 
         // Resolve links if requested
         if (args.resolveLinks !== false) {
-          const fileIndex = await getFileIndex();
+          const fileIndex = await getFileIndex(vault.path);
           for (const link of links) {
             const resolved = await resolveWikilink(link.target, vault.path, fileIndex);
             if (resolved) {
@@ -202,10 +214,12 @@ export function createWikilinkHandlers(config: Config) {
     },
 
     get_backlinks: async (args: {
+      vault?: string;
       path: string;
       includeContext?: boolean;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const targetPath = args.path;
         const targetName = path.basename(targetPath, '.md');
         const backlinks: BacklinkEntry[] = [];
@@ -239,9 +253,10 @@ export function createWikilinkHandlers(config: Config) {
       }
     },
 
-    follow_link: async (args: { link: string }): Promise<ToolResponse> => {
+    follow_link: async (args: { vault?: string; link: string }): Promise<ToolResponse> => {
       try {
-        const fileIndex = await getFileIndex();
+        const vault = resolveVault(config, args.vault);
+        const fileIndex = await getFileIndex(vault.path);
         const resolved = await resolveWikilink(args.link, vault.path, fileIndex);
 
         if (!resolved) {
@@ -283,17 +298,22 @@ export function createWikilinkHandlers(config: Config) {
       }
     },
 
-    rebuild_link_index: async (): Promise<ToolResponse> => {
+    rebuild_link_index: async (args: { vault?: string }): Promise<ToolResponse> => {
       try {
-        fileIndexCache = null;
-        fileIndexVault = null;
-        const index = await getFileIndex();
+        const vault = resolveVault(config, args.vault);
+
+        // Clear cache for this vault
+        fileIndexCaches.delete(vault.path);
+
+        // Rebuild
+        const index = await getFileIndex(vault.path);
 
         return {
           content: [{
             type: 'text',
             text: JSON.stringify({
               rebuilt: true,
+              vault: vault.name,
               fileCount: index.size
             }, null, 2)
           }],

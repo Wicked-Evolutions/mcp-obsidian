@@ -71,3 +71,13 @@ export function getPrimaryVault(config: Config): VaultConfig {
 export function getVaultByName(config: Config, name: string): VaultConfig | undefined {
   return config.vaults.find(v => v.name.toLowerCase() === name.toLowerCase());
 }
+
+// Resolve vault by name, with fallback to primary vault
+export function resolveVault(config: Config, vaultName?: string): VaultConfig {
+  if (!vaultName) return getPrimaryVault(config);
+  const found = getVaultByName(config, vaultName);
+  if (!found) {
+    throw new Error(`Unknown vault: "${vaultName}". Available: ${config.vaults.map(v => v.name).join(', ')}`);
+  }
+  return found;
+}

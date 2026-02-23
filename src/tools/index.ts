@@ -13,6 +13,8 @@ import { wikilinkTools, createWikilinkHandlers } from './wikilinks.js';
 import { semanticTools, createSemanticHandlers } from './semantic.js';
 import { crossVaultTools, createCrossVaultHandlers } from './crossvault.js';
 import { sectionTools, createSectionHandlers } from './sections.js';
+import { queryTools, createQueryHandlers } from './query.js';
+import { analyticsTools, createAnalyticsHandlers } from './analytics.js';
 
 /**
  * All tool definitions
@@ -22,7 +24,9 @@ export const allTools: Tool[] = [
   ...wikilinkTools,
   ...semanticTools,
   ...crossVaultTools,
-  ...sectionTools
+  ...sectionTools,
+  ...queryTools,
+  ...analyticsTools
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,7 +41,9 @@ export function createAllHandlers(config: Config): Record<string, AnyHandler> {
     ...createWikilinkHandlers(config),
     ...createSemanticHandlers(config),
     ...createCrossVaultHandlers(config),
-    ...createSectionHandlers(config)
+    ...createSectionHandlers(config),
+    ...createQueryHandlers(config),
+    ...createAnalyticsHandlers(config)
   } as Record<string, AnyHandler>;
 }
 

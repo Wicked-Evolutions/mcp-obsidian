@@ -6,7 +6,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { Config, getPrimaryVault } from '../config.js';
+import { Config, resolveVault } from '../config.js';
 import { FileEntry, ToolResponse, SearchResult, SearchMatch } from '../types/index.js';
 import {
   parseMarkdownFile,
@@ -15,6 +15,12 @@ import {
   fileExists,
   extractTitle
 } from '../parsers/markdown.js';
+
+// Vault parameter definition (shared across all tools)
+const vaultParam = {
+  type: 'string' as const,
+  description: 'Vault name (e.g., "Platform", "Helena"). Defaults to first vault if omitted.'
+};
 
 /**
  * Tool definitions for file operations
@@ -26,6 +32,7 @@ export const fileTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         directory: {
           type: 'string',
           description: 'Relative path from vault root. Empty or "/" for vault root.'
@@ -48,6 +55,7 @@ export const fileTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path from vault root (e.g., "01 Evergreen Notes/My Note.md")'
@@ -62,6 +70,7 @@ export const fileTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path for the new file (e.g., "03 Projects/New Project.md")'
@@ -84,6 +93,7 @@ export const fileTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the file'
@@ -106,6 +116,7 @@ export const fileTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the file to delete'
@@ -120,6 +131,7 @@ export const fileTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the file'
@@ -134,6 +146,7 @@ export const fileTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         path: {
           type: 'string',
           description: 'Relative path to the file'
@@ -152,6 +165,7 @@ export const fileTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        vault: vaultParam,
         query: {
           type: 'string',
           description: 'Text or regex pattern to search for'
@@ -173,6 +187,25 @@ export const fileTools: Tool[] = [
       },
       required: ['query']
     }
+  },
+  {
+    name: 'move_note',
+    description: 'Move/rename a note and update all wikilinks pointing to it across the vault.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        from_path: {
+          type: 'string',
+          description: 'Current relative path of the file'
+        },
+        to_path: {
+          type: 'string',
+          description: 'New relative path for the file'
+        }
+      },
+      required: ['from_path', 'to_path']
+    }
   }
 ];
 
@@ -180,15 +213,15 @@ export const fileTools: Tool[] = [
  * Handler functions for file tools
  */
 export function createFileHandlers(config: Config) {
-  const vault = getPrimaryVault(config);
-
   return {
     list_files: async (args: {
+      vault?: string;
       directory?: string;
       pattern?: string;
       recursive?: boolean;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const dir = args.directory || '';
         const targetPath = path.join(vault.path, dir);
 
@@ -213,8 +246,9 @@ export function createFileHandlers(config: Config) {
       }
     },
 
-    read_file: async (args: { path: string }): Promise<ToolResponse> => {
+    read_file: async (args: { vault?: string; path: string }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const parsed = await parseMarkdownFile(args.path, vault.path);
         const title = extractTitle(parsed);
 
@@ -239,11 +273,14 @@ export function createFileHandlers(config: Config) {
     },
 
     create_file: async (args: {
+      vault?: string;
       path: string;
       content: string;
       frontmatter?: Record<string, unknown>;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
+
         // Check if file already exists
         if (await fileExists(args.path, vault.path)) {
           return {
@@ -279,12 +316,13 @@ export function createFileHandlers(config: Config) {
     },
 
     update_file: async (args: {
+      vault?: string;
       path: string;
       content: string;
       frontmatter?: Record<string, unknown>;
     }): Promise<ToolResponse> => {
       try {
-        const absolutePath = path.join(vault.path, args.path);
+        const vault = resolveVault(config, args.vault);
 
         // Read existing file to preserve frontmatter if not provided
         let finalFrontmatter = args.frontmatter;
@@ -323,8 +361,9 @@ export function createFileHandlers(config: Config) {
       }
     },
 
-    delete_file: async (args: { path: string }): Promise<ToolResponse> => {
+    delete_file: async (args: { vault?: string; path: string }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const absolutePath = path.join(vault.path, args.path);
         await fs.unlink(absolutePath);
 
@@ -343,8 +382,9 @@ export function createFileHandlers(config: Config) {
       }
     },
 
-    get_frontmatter: async (args: { path: string }): Promise<ToolResponse> => {
+    get_frontmatter: async (args: { vault?: string; path: string }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const parsed = await parseMarkdownFile(args.path, vault.path);
 
         return {
@@ -366,10 +406,12 @@ export function createFileHandlers(config: Config) {
     },
 
     update_frontmatter: async (args: {
+      vault?: string;
       path: string;
       updates: Record<string, unknown>;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const parsed = await updateFrontmatter(args.path, vault.path, args.updates);
 
         return {
@@ -392,12 +434,14 @@ export function createFileHandlers(config: Config) {
     },
 
     search_content: async (args: {
+      vault?: string;
       query: string;
       directory?: string;
       caseSensitive?: boolean;
       maxResults?: number;
     }): Promise<ToolResponse> => {
       try {
+        const vault = resolveVault(config, args.vault);
         const searchDir = args.directory
           ? path.join(vault.path, args.directory)
           : vault.path;
@@ -425,8 +469,117 @@ export function createFileHandlers(config: Config) {
           isError: true
         };
       }
+    },
+
+    move_note: async (args: {
+      vault?: string;
+      from_path: string;
+      to_path: string;
+    }): Promise<ToolResponse> => {
+      try {
+        const vault = resolveVault(config, args.vault);
+        const fromAbsolute = path.join(vault.path, args.from_path);
+        const toAbsolute = path.join(vault.path, args.to_path);
+
+        // Verify source exists
+        if (!(await fileExists(args.from_path, vault.path))) {
+          return {
+            content: [{ type: 'text', text: `Source file not found: ${args.from_path}` }],
+            isError: true
+          };
+        }
+
+        // Verify destination doesn't exist
+        if (await fileExists(args.to_path, vault.path)) {
+          return {
+            content: [{ type: 'text', text: `Destination already exists: ${args.to_path}` }],
+            isError: true
+          };
+        }
+
+        // Create destination directory if needed
+        const destDir = path.dirname(toAbsolute);
+        await fs.mkdir(destDir, { recursive: true });
+
+        // Move the file
+        await fs.rename(fromAbsolute, toAbsolute);
+
+        // Update wikilinks across the vault
+        const oldName = path.basename(args.from_path, '.md');
+        const newName = path.basename(args.to_path, '.md');
+        let updatedFiles = 0;
+
+        if (oldName !== newName) {
+          updatedFiles = await updateWikilinksInVault(vault.path, oldName, newName);
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              moved: true,
+              from: args.from_path,
+              to: args.to_path,
+              wikilinksUpdated: updatedFiles
+            }, null, 2)
+          }],
+          isError: false
+        };
+      } catch (error) {
+        return {
+          content: [{ type: 'text', text: `Error moving note: ${error}` }],
+          isError: true
+        };
+      }
     }
   };
+}
+
+/**
+ * Helper: Update wikilinks across vault when a note is renamed
+ */
+async function updateWikilinksInVault(
+  vaultPath: string,
+  oldName: string,
+  newName: string,
+  dirPath?: string
+): Promise<number> {
+  const searchDir = dirPath || vaultPath;
+  let updatedCount = 0;
+  const entries = await fs.readdir(searchDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+    const fullPath = path.join(searchDir, entry.name);
+
+    if (entry.isDirectory()) {
+      updatedCount += await updateWikilinksInVault(vaultPath, oldName, newName, fullPath);
+    } else if (entry.name.endsWith('.md')) {
+      const content = await fs.readFile(fullPath, 'utf-8');
+      // Match [[oldName]], [[oldName|alias]], [[path/oldName]], [[path/oldName|alias]]
+      const regex = new RegExp(
+        `\\[\\[([^\\]]*?\\/)?${escapeRegex(oldName)}(\\|[^\\]]*)?\\]\\]`,
+        'g'
+      );
+
+      if (regex.test(content)) {
+        const updated = content.replace(regex, (match, pathPrefix, alias) => {
+          return `[[${pathPrefix || ''}${newName}${alias || ''}]]`;
+        });
+        await fs.writeFile(fullPath, updated, 'utf-8');
+        updatedCount++;
+      }
+    }
+  }
+
+  return updatedCount;
+}
+
+/**
+ * Helper: Escape string for use in regex
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
