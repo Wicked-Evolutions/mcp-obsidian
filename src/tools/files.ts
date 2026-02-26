@@ -501,10 +501,10 @@ export function createFileHandlers(config: Config) {
         const destDir = path.dirname(toAbsolute);
         await fs.mkdir(destDir, { recursive: true });
 
-        // Move the file
-        await fs.rename(fromAbsolute, toAbsolute);
-
-        // Update wikilinks across the vault
+        // Update wikilinks BEFORE moving the file.
+        // If we crash after move but before link update, all links are broken.
+        // If we crash after link update but before move, links point to new name
+        // but old file still exists — easier to recover from.
         const oldName = path.basename(args.from_path, '.md');
         const newName = path.basename(args.to_path, '.md');
         let updatedFiles = 0;
@@ -512,6 +512,9 @@ export function createFileHandlers(config: Config) {
         if (oldName !== newName) {
           updatedFiles = await updateWikilinksInVault(vault.path, oldName, newName);
         }
+
+        // Move the file (after links are updated)
+        await fs.rename(fromAbsolute, toAbsolute);
 
         return {
           content: [{
@@ -640,6 +643,9 @@ async function searchFiles(
     if (entry.isDirectory()) {
       await searchFiles(fullPath, vaultPath, regex, maxResults, results);
     } else if (entry.name.endsWith('.md')) {
+      // Skip files larger than 50 MB to prevent OOM
+      const stat = await fs.stat(fullPath);
+      if (stat.size > 50 * 1024 * 1024) continue;
       const content = await fs.readFile(fullPath, 'utf-8');
       const matches = findMatches(content, regex);
 

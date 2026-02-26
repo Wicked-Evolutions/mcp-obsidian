@@ -7,7 +7,23 @@ import matter from 'gray-matter';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ParsedFile } from '../types/index.js';
-import { resolvePathInVault } from '../config.js';
+import { resolvePathInVault, verifyPathAfterOpen } from '../config.js';
+
+/**
+ * Maximum file size we'll read into memory (default 50 MB).
+ * Prevents OOM from adversarial or accidentally huge files.
+ * Override via OBSIDIAN_MAX_FILE_SIZE env var (in bytes).
+ */
+const MAX_FILE_SIZE = parseInt(process.env.OBSIDIAN_MAX_FILE_SIZE || '', 10) || 50 * 1024 * 1024;
+
+async function checkFileSize(filePath: string): Promise<void> {
+  const stat = await fs.stat(filePath);
+  if (stat.size > MAX_FILE_SIZE) {
+    const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
+    const limitMB = (MAX_FILE_SIZE / (1024 * 1024)).toFixed(0);
+    throw new Error(`File too large (${sizeMB} MB, limit ${limitMB} MB): ${path.basename(filePath)}`);
+  }
+}
 
 /**
  * Parse a markdown file, extracting frontmatter and content
@@ -18,7 +34,10 @@ export async function parseMarkdownFile(filePath: string, vaultPath: string): Pr
     ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
     : resolvePathInVault(vaultPath, filePath);
 
+  await checkFileSize(absolutePath);
   const rawContent = await fs.readFile(absolutePath, 'utf-8');
+  // TOCTOU: verify symlink wasn't swapped between resolvePathInVault and readFile
+  await verifyPathAfterOpen(absolutePath, vaultPath);
   const { data: frontmatter, content } = matter(rawContent);
 
   // Calculate relative path from vault root
@@ -218,7 +237,9 @@ export async function appendToSection(
     ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
     : resolvePathInVault(vaultPath, filePath);
 
+  await checkFileSize(absolutePath);
   const rawContent = await fs.readFile(absolutePath, 'utf-8');
+  await verifyPathAfterOpen(absolutePath, vaultPath);
   const section = findSectionByHeading(rawContent, heading);
 
   if (!section) {
@@ -250,7 +271,9 @@ export async function prependToSection(
     ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
     : resolvePathInVault(vaultPath, filePath);
 
+  await checkFileSize(absolutePath);
   const rawContent = await fs.readFile(absolutePath, 'utf-8');
+  await verifyPathAfterOpen(absolutePath, vaultPath);
   const section = findSectionByHeading(rawContent, heading);
 
   if (!section) {
@@ -283,7 +306,9 @@ export async function replaceSection(
     ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
     : resolvePathInVault(vaultPath, filePath);
 
+  await checkFileSize(absolutePath);
   const rawContent = await fs.readFile(absolutePath, 'utf-8');
+  await verifyPathAfterOpen(absolutePath, vaultPath);
   const section = findSectionByHeading(rawContent, heading);
 
   if (!section) {

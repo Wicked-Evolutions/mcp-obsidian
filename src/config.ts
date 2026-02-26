@@ -133,3 +133,27 @@ export function resolvePathInVault(vaultPath: string, userPath: string): string 
 
   return resolved;
 }
+
+/**
+ * Verify that an open file descriptor's real path is still within the vault.
+ * Call this AFTER opening a file to close the TOCTOU window between
+ * resolvePathInVault() (which checks the symlink target) and the actual open().
+ *
+ * @param fd - The open file descriptor (from fs.open)
+ * @param vaultPath - The absolute path to the vault root
+ * @throws Error if the fd resolves outside the vault (symlink swapped between check and open)
+ */
+export async function verifyPathAfterOpen(fdPath: string, vaultPath: string): Promise<void> {
+  const { realpath } = await import('fs/promises');
+  try {
+    const realFilePath = await realpath(fdPath);
+    const realVault = await realpath(vaultPath);
+    const realVaultPrefix = realVault.endsWith(path.sep) ? realVault : realVault + path.sep;
+    if (realFilePath !== realVault && !realFilePath.startsWith(realVaultPrefix)) {
+      throw new Error(`TOCTOU: file resolved outside vault after open. Real path: "${realFilePath}"`);
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('TOCTOU')) throw e;
+    // File may have been deleted between open and check — that's fine
+  }
+}

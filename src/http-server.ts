@@ -52,9 +52,17 @@ export function createHttpServer(options: HttpServerOptions) {
   });
 
   // Auth middleware — all routes except health check require Bearer token
+  // Uses timing-safe comparison to prevent side-channel attacks
   const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.slice(7) !== effectiveToken) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized. Provide Authorization: Bearer <token> header.' });
+    }
+    const provided = authHeader.slice(7);
+    // Constant-time comparison — prevents timing side-channel leaking token bytes
+    const tokenBuf = Buffer.from(effectiveToken, 'utf-8');
+    const providedBuf = Buffer.from(provided, 'utf-8');
+    if (tokenBuf.length !== providedBuf.length || !crypto.timingSafeEqual(tokenBuf, providedBuf)) {
       return res.status(401).json({ error: 'Unauthorized. Provide Authorization: Bearer <token> header.' });
     }
     next();

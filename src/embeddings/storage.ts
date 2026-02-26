@@ -332,9 +332,17 @@ export class EmbeddingStorage {
     score: number;
   }> {
     try {
-      // FTS5 MATCH query - escape special characters
-      const sanitizedQuery = query.replace(/['"]/g, '').trim();
-      if (!sanitizedQuery) return [];
+      // FTS5 MATCH query - sanitize to prevent operator injection.
+      // Strip quotes, then wrap each word in double quotes to treat as literals,
+      // neutralizing FTS5 operators (AND, OR, NOT, NEAR) and column filters.
+      const words = query
+        .replace(/['"]/g, '')
+        .split(/\s+/)
+        .map(w => w.replace(/[^a-zA-Z0-9_\-]/g, ''))  // strip special chars
+        .filter(w => w.length > 0 && w.length < 100);  // drop empty/absurd tokens
+      if (words.length === 0) return [];
+      // Each word quoted as literal — FTS5 operators like NEAR/AND/OR are neutralized
+      const sanitizedQuery = words.map(w => `"${w}"`).join(' ');
 
       const rows = this.db.prepare(`
         SELECT file_path, block_id, bm25(content_fts) as score

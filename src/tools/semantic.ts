@@ -404,6 +404,13 @@ export function createSemanticHandlers(config: Config) {
 
         for (const filePath of files) {
           try {
+            // Skip files larger than 50 MB to prevent OOM during indexing
+            const fileStat = await fs.stat(path.join(vault.path, filePath));
+            if (fileStat.size > 50 * 1024 * 1024) {
+              skipped++;
+              continue;
+            }
+
             const content = await fs.readFile(path.join(vault.path, filePath), 'utf-8');
 
             // Skip empty or nearly empty files
