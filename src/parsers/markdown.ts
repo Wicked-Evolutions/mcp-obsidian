@@ -7,14 +7,16 @@ import matter from 'gray-matter';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ParsedFile } from '../types/index.js';
+import { resolvePathInVault } from '../config.js';
 
 /**
  * Parse a markdown file, extracting frontmatter and content
  */
 export async function parseMarkdownFile(filePath: string, vaultPath: string): Promise<ParsedFile> {
+  // If already absolute, verify it's within the vault; otherwise resolve safely
   const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.join(vaultPath, filePath);
+    ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
+    : resolvePathInVault(vaultPath, filePath);
 
   const rawContent = await fs.readFile(absolutePath, 'utf-8');
   const { data: frontmatter, content } = matter(rawContent);
@@ -88,8 +90,8 @@ export async function createMarkdownFile(
   frontmatter: Record<string, unknown> = {}
 ): Promise<ParsedFile> {
   const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.join(vaultPath, filePath);
+    ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
+    : resolvePathInVault(vaultPath, filePath);
 
   // Ensure directory exists
   const dir = path.dirname(absolutePath);
@@ -110,8 +112,8 @@ export async function createMarkdownFile(
  */
 export async function fileExists(filePath: string, vaultPath: string): Promise<boolean> {
   const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.join(vaultPath, filePath);
+    ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
+    : resolvePathInVault(vaultPath, filePath);
 
   try {
     await fs.access(absolutePath);
@@ -194,6 +196,16 @@ export function findSectionByHeading(content: string, heading: string): SectionB
 }
 
 /**
+ * Atomic write helper — writes to a temp file then renames.
+ * Prevents partial writes from corrupting files on crash or concurrent access.
+ */
+async function atomicWriteFile(filePath: string, content: string): Promise<void> {
+  const tmpPath = filePath + '.tmp.' + Date.now();
+  await fs.writeFile(tmpPath, content, 'utf-8');
+  await fs.rename(tmpPath, filePath);
+}
+
+/**
  * Append content to a section (before the next heading)
  */
 export async function appendToSection(
@@ -203,8 +215,8 @@ export async function appendToSection(
   newContent: string
 ): Promise<{ success: boolean; error?: string }> {
   const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.join(vaultPath, filePath);
+    ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
+    : resolvePathInVault(vaultPath, filePath);
 
   const rawContent = await fs.readFile(absolutePath, 'utf-8');
   const section = findSectionByHeading(rawContent, heading);
@@ -213,22 +225,14 @@ export async function appendToSection(
     return { success: false, error: `Section "${heading}" not found` };
   }
 
-  // Ensure proper spacing
-  const existingContent = rawContent.slice(section.contentStart, section.contentEnd);
-  const needsLeadingNewline = existingContent.length > 0 && !existingContent.endsWith('\n\n');
-  const needsTrailingNewline = section.contentEnd < rawContent.length;
+  // Insert at end of section content, before next heading
+  // trimEnd() removes trailing whitespace, then add exactly one blank line separator
+  const before = rawContent.slice(0, section.contentEnd).trimEnd();
+  const after = rawContent.slice(section.contentEnd);
+  const updatedContent = before + '\n\n' + newContent.trim() + '\n' +
+    (after.length > 0 ? '\n' + after : '');
 
-  const insertion = (needsLeadingNewline ? '\n' : '') +
-                    newContent +
-                    (needsTrailingNewline ? '\n\n' : '\n');
-
-  // Insert at end of section
-  const updatedContent =
-    rawContent.slice(0, section.contentEnd).trimEnd() + '\n\n' +
-    newContent.trim() + '\n' +
-    (section.contentEnd < rawContent.length ? '\n' + rawContent.slice(section.contentEnd) : '');
-
-  await fs.writeFile(absolutePath, updatedContent, 'utf-8');
+  await atomicWriteFile(absolutePath, updatedContent);
 
   return { success: true };
 }
@@ -243,8 +247,8 @@ export async function prependToSection(
   newContent: string
 ): Promise<{ success: boolean; error?: string }> {
   const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.join(vaultPath, filePath);
+    ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
+    : resolvePathInVault(vaultPath, filePath);
 
   const rawContent = await fs.readFile(absolutePath, 'utf-8');
   const section = findSectionByHeading(rawContent, heading);
@@ -253,13 +257,15 @@ export async function prependToSection(
     return { success: false, error: `Section "${heading}" not found` };
   }
 
-  // Insert right after heading with proper spacing
+  // headingEnd already includes the trailing newline of the heading line,
+  // so contentStart === headingEnd. Insert content with one blank line after heading.
+  const existingContent = rawContent.slice(section.contentStart);
   const updatedContent =
     rawContent.slice(0, section.headingEnd) +
-    '\n' + newContent.trim() + '\n' +
-    rawContent.slice(section.contentStart);
+    newContent.trim() + '\n\n' +
+    existingContent.replace(/^\n+/, '');  // Remove leading blank lines to prevent accumulation
 
-  await fs.writeFile(absolutePath, updatedContent, 'utf-8');
+  await atomicWriteFile(absolutePath, updatedContent);
 
   return { success: true };
 }
@@ -274,8 +280,8 @@ export async function replaceSection(
   newContent: string
 ): Promise<{ success: boolean; error?: string }> {
   const absolutePath = path.isAbsolute(filePath)
-    ? filePath
-    : path.join(vaultPath, filePath);
+    ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
+    : resolvePathInVault(vaultPath, filePath);
 
   const rawContent = await fs.readFile(absolutePath, 'utf-8');
   const section = findSectionByHeading(rawContent, heading);
@@ -284,13 +290,14 @@ export async function replaceSection(
     return { success: false, error: `Section "${heading}" not found` };
   }
 
-  // Replace section content
+  // Replace: heading stays, content between headingEnd and contentEnd is replaced
+  const after = rawContent.slice(section.contentEnd);
   const updatedContent =
     rawContent.slice(0, section.headingEnd) +
-    '\n' + newContent.trim() + '\n\n' +
-    rawContent.slice(section.contentEnd);
+    newContent.trim() + '\n' +
+    (after.length > 0 ? '\n' + after : '');
 
-  await fs.writeFile(absolutePath, updatedContent, 'utf-8');
+  await atomicWriteFile(absolutePath, updatedContent);
 
   return { success: true };
 }
@@ -329,6 +336,10 @@ export function extractSections(content: string): ExtractedSection[] {
   // Regex to match markdown headings
   const headingRegex = /^(#{1,6})\s+(.+)$/;
 
+  // Track blockId usage to deduplicate — two "## Summary" headings get
+  // blockIds "summary" and "summary-2" instead of both being "summary"
+  const blockIdCounts = new Map<string, number>();
+
   let currentSection: {
     heading: string;
     level: number;
@@ -361,11 +372,17 @@ export function extractSections(content: string): ExtractedSection[] {
         });
       }
 
+      // Generate unique blockId — append counter suffix for duplicates
+      let baseId = slugify(headingText);
+      const count = (blockIdCounts.get(baseId) || 0) + 1;
+      blockIdCounts.set(baseId, count);
+      const blockId = count === 1 ? baseId : `${baseId}-${count}`;
+
       // Start new section
       currentSection = {
         heading: line,
         level,
-        blockId: slugify(headingText),
+        blockId,
         startLine: i + 1,  // 1-indexed
         contentLines: []
       };

@@ -6,7 +6,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { Config, resolveVault } from '../config.js';
+import { Config, resolveVault, resolvePathInVault } from '../config.js';
 import { FileEntry, ToolResponse, SearchResult, SearchMatch } from '../types/index.js';
 import {
   parseMarkdownFile,
@@ -223,7 +223,7 @@ export function createFileHandlers(config: Config) {
       try {
         const vault = resolveVault(config, args.vault);
         const dir = args.directory || '';
-        const targetPath = path.join(vault.path, dir);
+        const targetPath = dir ? resolvePathInVault(vault.path, dir) : vault.path;
 
         const entries = await listDirectory(targetPath, vault.path, args.recursive || false);
 
@@ -364,7 +364,7 @@ export function createFileHandlers(config: Config) {
     delete_file: async (args: { vault?: string; path: string }): Promise<ToolResponse> => {
       try {
         const vault = resolveVault(config, args.vault);
-        const absolutePath = path.join(vault.path, args.path);
+        const absolutePath = resolvePathInVault(vault.path, args.path);
         await fs.unlink(absolutePath);
 
         return {
@@ -443,7 +443,7 @@ export function createFileHandlers(config: Config) {
       try {
         const vault = resolveVault(config, args.vault);
         const searchDir = args.directory
-          ? path.join(vault.path, args.directory)
+          ? resolvePathInVault(vault.path, args.directory)
           : vault.path;
 
         const flags = args.caseSensitive ? 'g' : 'gi';
@@ -478,8 +478,8 @@ export function createFileHandlers(config: Config) {
     }): Promise<ToolResponse> => {
       try {
         const vault = resolveVault(config, args.vault);
-        const fromAbsolute = path.join(vault.path, args.from_path);
-        const toAbsolute = path.join(vault.path, args.to_path);
+        const fromAbsolute = resolvePathInVault(vault.path, args.from_path);
+        const toAbsolute = resolvePathInVault(vault.path, args.to_path);
 
         // Verify source exists
         if (!(await fileExists(args.from_path, vault.path))) {

@@ -1,14 +1,18 @@
 /**
  * File watcher for automatic index updates
  * Uses native fs.watch for efficient file system monitoring
+ *
+ * Uses shared storage instances (same DB connection as semantic.ts)
+ * and section-level chunking consistent with index_vault.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { VaultConfig } from '../types/index.js';
-import { EmbeddingStorage } from './storage.js';
+import { getSharedStorage } from './storage.js';
 import { generateEmbedding, checkOllamaAvailability, OllamaConfig } from './ollama.js';
+import { extractSections } from '../parsers/markdown.js';
 
 interface WatcherConfig {
   vaults: VaultConfig[];
@@ -20,17 +24,6 @@ interface PendingFile {
   vaultPath: string;
   filePath: string;
   timestamp: number;
-}
-
-// Storage instances per vault
-const storageMap = new Map<string, EmbeddingStorage>();
-
-function getStorage(vaultPath: string): EmbeddingStorage {
-  if (!storageMap.has(vaultPath)) {
-    const dbPath = path.join(vaultPath, '.mcp-obsidian', 'embeddings.db');
-    storageMap.set(vaultPath, new EmbeddingStorage(dbPath));
-  }
-  return storageMap.get(vaultPath)!;
 }
 
 function hashContent(content: string): string {
@@ -130,6 +123,8 @@ export class VaultWatcher {
 
   /**
    * Process all pending files
+   * Uses section-level chunking consistent with index_vault,
+   * and stores content for FTS indexing.
    */
   private async processPendingFiles(): Promise<void> {
     if (this.isProcessing || this.pendingFiles.size === 0) return;
@@ -156,11 +151,11 @@ export class VaultWatcher {
     for (const file of files) {
       try {
         const absolutePath = path.join(file.vaultPath, file.filePath);
+        const storage = getSharedStorage(file.vaultPath);
 
         // Check if file exists
         if (!fs.existsSync(absolutePath)) {
           // File was deleted - remove from index
-          const storage = getStorage(file.vaultPath);
           storage.delete(file.filePath);
           deleted++;
           continue;
@@ -168,25 +163,65 @@ export class VaultWatcher {
 
         // Read file content
         const content = fs.readFileSync(absolutePath, 'utf-8');
-        const contentHash = hashContent(content);
+        const trimmedContent = content.trim();
 
-        // Check if already up to date
-        const storage = getStorage(file.vaultPath);
-        if (storage.isUpToDate(file.filePath, contentHash)) {
+        // Skip empty files
+        if (trimmedContent.length < 10) {
           skipped++;
           continue;
         }
 
-        // Generate embedding
-        const result = await generateEmbedding(content, this.config.ollama);
+        // Section-level chunking (consistent with index_vault)
+        const sections = extractSections(trimmedContent);
 
-        // Store embedding
-        storage.store(file.filePath, result.embedding, contentHash, {
-          indexedAt: new Date().toISOString(),
-          autoIndexed: true
-        });
+        if (sections.length === 0) {
+          // No headings — index whole file
+          const contentHash = hashContent(content);
+          if (storage.isUpToDate(file.filePath, contentHash)) {
+            skipped++;
+            continue;
+          }
 
-        indexed++;
+          const result = await generateEmbedding(content, this.config.ollama);
+          if (result.embedding && result.embedding.length > 0) {
+            // Delete old embeddings first (may have had sections before)
+            storage.delete(file.filePath);
+            storage.store(file.filePath, result.embedding, contentHash, {
+              indexedAt: new Date().toISOString(),
+              autoIndexed: true,
+              chunked: false
+            }, null, content);
+            indexed++;
+          }
+        } else {
+          // Delete old embeddings and re-index sections
+          storage.delete(file.filePath);
+          let fileIndexed = false;
+
+          for (const section of sections) {
+            if (section.content.length < 20 && !section.heading) continue;
+
+            const sectionText = section.heading
+              ? `${section.heading}\n\n${section.content}`
+              : section.content;
+
+            const sectionHash = hashContent(sectionText);
+            const result = await generateEmbedding(sectionText, this.config.ollama);
+
+            if (result.embedding && result.embedding.length > 0) {
+              storage.store(file.filePath, result.embedding, sectionHash, {
+                indexedAt: new Date().toISOString(),
+                autoIndexed: true,
+                heading: section.heading,
+                level: section.level,
+                chunked: true
+              }, section.blockId, sectionText);
+              fileIndexed = true;
+            }
+          }
+
+          if (fileIndexed) indexed++;
+        }
       } catch (error) {
         console.error(`[mcp-obsidian] Auto-index error for ${file.filePath}:`, error);
       }

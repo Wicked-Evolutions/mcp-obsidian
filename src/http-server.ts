@@ -4,10 +4,16 @@
  * Provides REST API access to semantic search and vault tools
  * for use by the Obsidian plugin and other local clients.
  *
- * Start with: OBSIDIAN_HTTP_SERVER=true node dist/index.js
+ * Security:
+ * - Binds to 127.0.0.1 only (not all interfaces)
+ * - Requires Bearer token auth via OBSIDIAN_HTTP_TOKEN env var
+ * - CORS restricted to app://obsidian.md origin (configurable)
+ *
+ * Start with: OBSIDIAN_HTTP_SERVER=true OBSIDIAN_HTTP_TOKEN=your-secret node dist/index.js
  */
 
-import express, { Request, Response } from 'express';
+import * as crypto from 'crypto';
+import express, { Request, Response, NextFunction } from 'express';
 import { Config, getPrimaryVault } from './config.js';
 import { allTools, createAllHandlers } from './tools/index.js';
 
@@ -20,35 +26,56 @@ export function createHttpServer(options: HttpServerOptions) {
   const { port, config } = options;
   const app = express();
 
+  // Auth token — required for HTTP mode
+  const authToken = process.env.OBSIDIAN_HTTP_TOKEN;
+  if (!authToken) {
+    console.error('[mcp-obsidian] WARNING: OBSIDIAN_HTTP_TOKEN not set. Generating a random token for this session.');
+  }
+  const effectiveToken = authToken || crypto.randomBytes(32).toString('hex');
+  if (!authToken) {
+    console.error(`[mcp-obsidian] Session token: ${effectiveToken}`);
+    console.error('[mcp-obsidian] Set OBSIDIAN_HTTP_TOKEN env var to use a persistent token.');
+  }
+
   app.use(express.json());
 
-  // CORS for local Obsidian plugin
-  app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
+  // CORS — restricted to Obsidian app origin (configurable via env)
+  const allowedOrigin = process.env.OBSIDIAN_HTTP_CORS_ORIGIN || 'app://obsidian.md';
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.header('Access-Control-Allow-Origin', allowedOrigin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') {
       return res.sendStatus(200);
     }
     next();
   });
 
+  // Auth middleware — all routes except health check require Bearer token
+  const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.slice(7) !== effectiveToken) {
+      return res.status(401).json({ error: 'Unauthorized. Provide Authorization: Bearer <token> header.' });
+    }
+    next();
+  };
+
   // Create all handlers
   const allHandlers = createAllHandlers(config);
   const vault = getPrimaryVault(config);
 
-  // Health check
+  // Health check (no auth required)
   app.get('/health', (req: Request, res: Response) => {
     res.json({ status: 'ok', vault: vault.name });
   });
 
   // List all available tools with their schemas
-  app.get('/tools', (req: Request, res: Response) => {
+  app.get('/tools', authMiddleware, (req: Request, res: Response) => {
     res.json(allTools);
   });
 
   // Execute any tool by name
-  app.post('/call', async (req: Request, res: Response) => {
+  app.post('/call', authMiddleware, async (req: Request, res: Response) => {
     try {
       const { tool, args = {} } = req.body;
 
@@ -81,7 +108,7 @@ export function createHttpServer(options: HttpServerOptions) {
   // Legacy endpoints for backwards compatibility
 
   // Semantic search (legacy)
-  app.post('/search', async (req: Request, res: Response) => {
+  app.post('/search', authMiddleware, async (req: Request, res: Response) => {
     try {
       const { query, limit = 10, minSimilarity = 0.5, expand = false } = req.body;
 
@@ -108,7 +135,7 @@ export function createHttpServer(options: HttpServerOptions) {
   });
 
   // Read file (legacy)
-  app.post('/read', async (req: Request, res: Response) => {
+  app.post('/read', authMiddleware, async (req: Request, res: Response) => {
     try {
       const { path: filePath } = req.body;
 
@@ -130,7 +157,7 @@ export function createHttpServer(options: HttpServerOptions) {
   });
 
   // Index status (legacy)
-  app.get('/index/status', async (req: Request, res: Response) => {
+  app.get('/index/status', authMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await allHandlers.index_status({});
       const data = JSON.parse(result.content[0]?.text || '{}');
@@ -140,9 +167,10 @@ export function createHttpServer(options: HttpServerOptions) {
     }
   });
 
-  // Start server
-  const server = app.listen(port, () => {
-    console.error(`[mcp-obsidian] HTTP server started on port ${port}`);
+  // Bind to localhost only — never expose to network
+  const host = '127.0.0.1';
+  const server = app.listen(port, host, () => {
+    console.error(`[mcp-obsidian] HTTP server started on ${host}:${port}`);
   });
 
   return server;

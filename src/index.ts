@@ -44,7 +44,7 @@ try {
 const server = new Server(
   {
     name: 'mcp-obsidian',
-    version: '1.0.0'
+    version: '2.1.0'
   },
   {
     capabilities: {
@@ -127,9 +127,9 @@ process.on('unhandledRejection', (error) => {
 
 // Start server
 async function main() {
-  // Check if HTTP server mode is enabled
-  const httpServerEnabled = process.env.OBSIDIAN_HTTP_SERVER === 'true';
-  const httpPort = parseInt(process.env.OBSIDIAN_HTTP_PORT || '3456', 10);
+  // Check if HTTP server mode is enabled (accept both env var names)
+  const httpServerEnabled = process.env.OBSIDIAN_HTTP_SERVER === 'true' || process.env.HTTP_MODE === 'true';
+  const httpPort = parseInt(process.env.OBSIDIAN_HTTP_PORT || process.env.HTTP_PORT || '3456', 10);
 
   if (httpServerEnabled) {
     // HTTP server mode - for Obsidian plugin access

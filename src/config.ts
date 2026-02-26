@@ -3,6 +3,8 @@
  * Supports single vault and multi-vault modes
  */
 
+import * as path from 'path';
+import * as fs from 'fs';
 import { VaultConfig } from './types/index.js';
 
 export interface Config {
@@ -80,4 +82,54 @@ export function resolveVault(config: Config, vaultName?: string): VaultConfig {
     throw new Error(`Unknown vault: "${vaultName}". Available: ${config.vaults.map(v => v.name).join(', ')}`);
   }
   return found;
+}
+
+/**
+ * Safely resolve a user-supplied relative path to an absolute path within a vault.
+ * Prevents path traversal (../), absolute paths, and symlink escapes.
+ *
+ * @param vaultPath - The absolute path to the vault root
+ * @param userPath - The user-supplied relative path
+ * @returns The absolute path guaranteed to be within the vault
+ * @throws Error if the path escapes the vault boundary
+ */
+export function resolvePathInVault(vaultPath: string, userPath: string): string {
+  // Reject absolute paths
+  if (path.isAbsolute(userPath)) {
+    throw new Error(`Absolute paths are not allowed: "${userPath}". Use a relative path from the vault root.`);
+  }
+
+  // Resolve to absolute, normalize away any ../
+  const resolved = path.resolve(vaultPath, userPath);
+
+  // Ensure the resolved path is within the vault
+  // Add trailing separator to prevent prefix attacks (e.g., /vault-secret matching /vault)
+  const vaultPrefix = vaultPath.endsWith(path.sep) ? vaultPath : vaultPath + path.sep;
+  if (resolved !== vaultPath && !resolved.startsWith(vaultPrefix)) {
+    throw new Error(`Path traversal detected: "${userPath}" resolves outside vault boundary.`);
+  }
+
+  // Check for symlink escape: resolve the real path and verify it's still in the vault
+  try {
+    // Only check if the path (or a parent) actually exists
+    let checkPath = resolved;
+    while (!fs.existsSync(checkPath) && checkPath !== vaultPath) {
+      checkPath = path.dirname(checkPath);
+    }
+    if (fs.existsSync(checkPath)) {
+      const realPath = fs.realpathSync(checkPath);
+      const realVault = fs.realpathSync(vaultPath);
+      const realVaultPrefix = realVault.endsWith(path.sep) ? realVault : realVault + path.sep;
+      if (realPath !== realVault && !realPath.startsWith(realVaultPrefix)) {
+        throw new Error(`Symlink escape detected: "${userPath}" resolves outside vault via symlink.`);
+      }
+    }
+  } catch (e) {
+    // Re-throw our own errors, ignore fs errors (file doesn't exist yet for create)
+    if (e instanceof Error && (e.message.includes('Symlink escape') || e.message.includes('Path traversal'))) {
+      throw e;
+    }
+  }
+
+  return resolved;
 }

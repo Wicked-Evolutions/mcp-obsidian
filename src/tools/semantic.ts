@@ -7,7 +7,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { Config, resolveVault } from '../config.js';
+import { Config, resolveVault, resolvePathInVault } from '../config.js';
 import { ToolResponse } from '../types/index.js';
 import { parseMarkdownFile, extractTitle, extractSections } from '../parsers/markdown.js';
 import {
@@ -15,20 +15,13 @@ import {
   checkOllamaAvailability,
   OllamaConfig
 } from '../embeddings/ollama.js';
-import { EmbeddingStorage } from '../embeddings/storage.js';
-
-// Per-vault storage instances (lazy initialized)
-const storageMap = new Map<string, EmbeddingStorage>();
+import { getSharedStorage } from '../embeddings/storage.js';
 
 /**
- * Get or create storage instance for a vault
+ * Get storage instance for a vault (shared singleton per vault path)
  */
-function getStorage(vaultPath: string): EmbeddingStorage {
-  if (!storageMap.has(vaultPath)) {
-    const dbPath = path.join(vaultPath, '.mcp-obsidian', 'embeddings.db');
-    storageMap.set(vaultPath, new EmbeddingStorage(dbPath));
-  }
-  return storageMap.get(vaultPath)!;
+function getStorage(vaultPath: string) {
+  return getSharedStorage(vaultPath);
 }
 
 /**
@@ -398,7 +391,7 @@ export function createSemanticHandlers(config: Config) {
 
         const store = getStorage(vault.path);
         const searchDir = args.directory
-          ? path.join(vault.path, args.directory)
+          ? resolvePathInVault(vault.path, args.directory)
           : vault.path;
 
         let indexedSections = 0;
@@ -505,6 +498,12 @@ export function createSemanticHandlers(config: Config) {
           }
         }
 
+        // Clean up stale embeddings for deleted/renamed files
+        const staleRemoved = store.deleteStale(vault.path);
+        if (staleRemoved > 0) {
+          console.error(`[mcp-obsidian] Removed ${staleRemoved} stale embedding(s) for deleted files`);
+        }
+
         return {
           content: [{
             type: 'text',
@@ -514,6 +513,7 @@ export function createSemanticHandlers(config: Config) {
               indexedSections,
               skipped,
               errors,
+              staleRemoved,
               totalFiles: files.length
             }, null, 2)
           }],
@@ -541,7 +541,7 @@ export function createSemanticHandlers(config: Config) {
         }
 
         const store = getStorage(vault.path);
-        const absolutePath = path.join(vault.path, args.path);
+        const absolutePath = resolvePathInVault(vault.path, args.path);
 
         const content = await fs.readFile(absolutePath, 'utf-8');
 

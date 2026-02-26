@@ -6,7 +6,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { Config, resolveVault } from '../config.js';
+import { Config, resolveVault, resolvePathInVault } from '../config.js';
 import { ToolResponse } from '../types/index.js';
 import { parseMarkdownFile, extractTitle } from '../parsers/markdown.js';
 
@@ -121,13 +121,22 @@ function matchesCondition(frontmatter: Record<string, unknown>, condition: Filte
       return !disallowed.some(v => String(v).toLowerCase() === String(fieldValue).toLowerCase());
     }
 
-    case 'greater_than':
+    case 'greater_than': {
       if (fieldValue === undefined || fieldValue === null) return false;
+      // Use numeric comparison when both values are numbers
+      const gtA = Number(fieldValue);
+      const gtB = Number(condition.value);
+      if (!isNaN(gtA) && !isNaN(gtB)) return gtA > gtB;
       return String(fieldValue) > String(condition.value);
+    }
 
-    case 'less_than':
+    case 'less_than': {
       if (fieldValue === undefined || fieldValue === null) return false;
+      const ltA = Number(fieldValue);
+      const ltB = Number(condition.value);
+      if (!isNaN(ltA) && !isNaN(ltB)) return ltA < ltB;
       return String(fieldValue) < String(condition.value);
+    }
 
     default:
       return true;
@@ -167,7 +176,7 @@ export function createQueryHandlers(config: Config) {
       try {
         const vault = resolveVault(config, args.vault);
         const searchDir = args.from
-          ? path.join(vault.path, args.from)
+          ? resolvePathInVault(vault.path, args.from)
           : vault.path;
         const limit = args.limit || 20;
 

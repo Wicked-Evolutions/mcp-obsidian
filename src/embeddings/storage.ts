@@ -25,6 +25,22 @@ export interface SearchResult {
   metadata: Record<string, unknown>;
 }
 
+// Shared storage instances across the process — prevents duplicate DB connections
+// between semantic.ts, watcher.ts, and crossvault.ts
+const sharedInstances = new Map<string, EmbeddingStorage>();
+
+/**
+ * Get or create a shared EmbeddingStorage instance for a vault.
+ * Ensures only one DB connection per vault path across the entire process.
+ */
+export function getSharedStorage(vaultPath: string): EmbeddingStorage {
+  const dbPath = path.join(vaultPath, '.mcp-obsidian', 'embeddings.db');
+  if (!sharedInstances.has(dbPath)) {
+    sharedInstances.set(dbPath, new EmbeddingStorage(dbPath));
+  }
+  return sharedInstances.get(dbPath)!;
+}
+
 export class EmbeddingStorage {
   private db: Database.Database;
 
@@ -43,6 +59,10 @@ export class EmbeddingStorage {
    * Initialize database schema
    */
   private initialize(): void {
+    // Enable WAL mode for better concurrent access and busy timeout
+    this.db.pragma('journal_mode = WAL');
+    this.db.pragma('busy_timeout = 5000');
+
     // Check if we need to migrate from old schema
     const tableExists = this.db.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='embeddings'"
@@ -165,7 +185,8 @@ export class EmbeddingStorage {
   }
 
   /**
-   * Get embedding for a file
+   * Get embedding for a file (or any section of it)
+   * When blockId is null, tries '' first (whole file), then returns the first section found.
    */
   get(filePath: string, blockId: string | null = null): StoredEmbedding | null {
     const normalizedBlockId = blockId || '';
@@ -173,7 +194,7 @@ export class EmbeddingStorage {
       SELECT * FROM embeddings WHERE file_path = ? AND block_id = ?
     `);
 
-    const row = stmt.get(filePath, normalizedBlockId) as {
+    let row = stmt.get(filePath, normalizedBlockId) as {
       id: number;
       file_path: string;
       block_id: string;
@@ -182,6 +203,14 @@ export class EmbeddingStorage {
       metadata: string;
       updated_at: number;
     } | undefined;
+
+    // Fix for get_similar: if looking for whole-file embedding but file is chunked,
+    // fall back to the first section's embedding
+    if (!row && normalizedBlockId === '') {
+      row = this.db.prepare(`
+        SELECT * FROM embeddings WHERE file_path = ? ORDER BY id ASC LIMIT 1
+      `).get(filePath) as typeof row;
+    }
 
     if (!row) return null;
 
@@ -216,6 +245,26 @@ export class EmbeddingStorage {
   delete(filePath: string): void {
     this.db.prepare('DELETE FROM embeddings WHERE file_path = ?').run(filePath);
     this.db.prepare('DELETE FROM content_fts WHERE file_path = ?').run(filePath);
+  }
+
+  /**
+   * Delete stale embeddings — removes rows for files that no longer exist on disk.
+   * Call after indexing to clean up renamed/deleted files.
+   */
+  deleteStale(vaultPath: string): number {
+    const rows = this.db.prepare(
+      'SELECT DISTINCT file_path FROM embeddings'
+    ).all() as Array<{ file_path: string }>;
+
+    let removed = 0;
+    for (const row of rows) {
+      const fullPath = path.join(vaultPath, row.file_path);
+      if (!fs.existsSync(fullPath)) {
+        this.delete(row.file_path);
+        removed++;
+      }
+    }
+    return removed;
   }
 
   /**

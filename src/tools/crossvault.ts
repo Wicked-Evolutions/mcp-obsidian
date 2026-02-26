@@ -16,7 +16,7 @@ import {
   cosineSimilarity,
   OllamaConfig
 } from '../embeddings/ollama.js';
-import { EmbeddingStorage } from '../embeddings/storage.js';
+import { getSharedStorage } from '../embeddings/storage.js';
 
 /**
  * Tool definitions for cross-vault operations
@@ -112,18 +112,11 @@ export const crossVaultTools: Tool[] = [
   }
 ];
 
-// Storage instances for each vault (lazy initialized)
-const storageMap = new Map<string, EmbeddingStorage>();
-
 /**
- * Get or create storage instance for a vault
+ * Get storage instance for a vault (shared singleton per vault path)
  */
-function getStorage(vault: VaultConfig): EmbeddingStorage {
-  if (!storageMap.has(vault.path)) {
-    const dbPath = path.join(vault.path, '.mcp-obsidian', 'embeddings.db');
-    storageMap.set(vault.path, new EmbeddingStorage(dbPath));
-  }
-  return storageMap.get(vault.path)!;
+function getStorage(vault: VaultConfig) {
+  return getSharedStorage(vault.path);
 }
 
 /**

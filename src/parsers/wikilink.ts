@@ -6,6 +6,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { WikiLink } from '../types/index.js';
+import { resolvePathInVault } from '../config.js';
 
 // Regex to match wikilinks: [[target]] or [[target|alias]]
 const WIKILINK_REGEX = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
@@ -70,13 +71,13 @@ export async function resolveWikilink(
     normalizedTarget += '.md';
   }
 
-  // Try exact path first
-  const exactPath = path.join(vaultPath, normalizedTarget);
+  // Try exact path first (with boundary check)
   try {
+    const exactPath = resolvePathInVault(vaultPath, normalizedTarget);
     await fs.access(exactPath);
     return exactPath;
   } catch {
-    // Not found at exact path
+    // Not found at exact path, or path traversal blocked
   }
 
   // If we have a file index, search by filename
