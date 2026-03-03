@@ -248,7 +248,17 @@ src/
     └── analytics.ts      # Vault health (4 tools)
 ```
 
+## Known Limitations
+
+- **`update_file` replaces entire content** — Use `append_to_section`, `prepend_to_section`, or `update_section` for partial updates. `update_file` is retained for full rewrites only.
+- **Unicode filenames** — Files with curly apostrophes (U+2019) and some Unicode characters may fail to resolve in `read_file` and `update_frontmatter`.
+- **Vault path changes** — If a vault folder is renamed on disk, the `OBSIDIAN_VAULTS` environment variable must be updated manually. The server does not auto-detect path changes.
+
 ## Changelog
+
+### v2.1.0 (2026-02-25)
+- **Security hardening**: TOCTOU race condition fixes, FTS injection prevention, timing attack mitigations
+- **Semantic search fixes**: Improved embedding stability and error handling
 
 ### v2.0.0 (2026-02-23)
 - **Unified multi-vault server**: All tools accept optional `vault` parameter for per-request vault routing. Eliminates need for separate server processes per vault.
