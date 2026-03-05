@@ -256,6 +256,10 @@ src/
 
 ## Changelog
 
+### v2.1.1 (2026-03-05)
+- **Fix: `create_file` frontmatter serialization**: Frontmatter passed as JSON string no longer produces corrupt YAML (char-by-char iteration). Eliminates need for create + update_frontmatter workaround.
+- **Fix: Unicode filename handling**: Added NFC/NFD normalization fallback in path resolution. Files with accented characters, smart quotes, or other Unicode now resolve correctly across different MCP clients and macOS APFS.
+
 ### v2.1.0 (2026-02-25)
 - **Security hardening**: TOCTOU race condition fixes, FTS injection prevention, timing attack mitigations
 - **Semantic search fixes**: Improved embedding stability and error handling

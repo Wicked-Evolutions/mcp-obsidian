@@ -1,6 +1,6 @@
 {
   "name": "@influencentricity/mcp-obsidian",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Unified multi-vault Obsidian MCP server. Direct filesystem access with wikilink support, backlinks, semantic search, frontmatter queries, and vault analytics.",
   "type": "module",
   "main": "dist/index.js",
