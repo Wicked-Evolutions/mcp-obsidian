@@ -106,7 +106,7 @@ export async function createMarkdownFile(
   filePath: string,
   vaultPath: string,
   content: string,
-  frontmatter: Record<string, unknown> = {}
+  frontmatter: Record<string, unknown> | string = {}
 ): Promise<ParsedFile> {
   const absolutePath = path.isAbsolute(filePath)
     ? resolvePathInVault(vaultPath, path.relative(vaultPath, filePath))
@@ -116,9 +116,22 @@ export async function createMarkdownFile(
   const dir = path.dirname(absolutePath);
   await fs.mkdir(dir, { recursive: true });
 
+  // Normalize frontmatter: if it arrives as a JSON string, parse it.
+  // gray-matter.stringify iterates strings char-by-char, producing corrupt YAML.
+  let normalizedFrontmatter: Record<string, unknown>;
+  if (typeof frontmatter === 'string') {
+    try {
+      normalizedFrontmatter = JSON.parse(frontmatter);
+    } catch {
+      normalizedFrontmatter = {};
+    }
+  } else {
+    normalizedFrontmatter = frontmatter;
+  }
+
   // Create file content with frontmatter
-  const fileContent = Object.keys(frontmatter).length > 0
-    ? matter.stringify(content, frontmatter)
+  const fileContent = Object.keys(normalizedFrontmatter).length > 0
+    ? matter.stringify(content, normalizedFrontmatter)
     : content;
 
   await fs.writeFile(absolutePath, fileContent, 'utf-8');

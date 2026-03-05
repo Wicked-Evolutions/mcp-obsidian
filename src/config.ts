@@ -99,8 +99,25 @@ export function resolvePathInVault(vaultPath: string, userPath: string): string 
     throw new Error(`Absolute paths are not allowed: "${userPath}". Use a relative path from the vault root.`);
   }
 
+  // Unicode normalization: macOS APFS preserves the normalization form used at
+  // creation time, but iCloud Drive and different MCP clients may send paths in
+  // NFC or NFD form. Try the path as-is first, then try the alternate
+  // normalization form if the file doesn't exist.
+  let normalizedPath = userPath;
+  const resolved1 = path.resolve(vaultPath, userPath);
+  if (!fs.existsSync(resolved1)) {
+    // Try NFC if we got NFD, or NFD if we got NFC
+    const nfc = userPath.normalize('NFC');
+    const nfd = userPath.normalize('NFD');
+    const altPath = userPath === nfc ? nfd : nfc;
+    const resolved2 = path.resolve(vaultPath, altPath);
+    if (fs.existsSync(resolved2)) {
+      normalizedPath = altPath;
+    }
+  }
+
   // Resolve to absolute, normalize away any ../
-  const resolved = path.resolve(vaultPath, userPath);
+  const resolved = path.resolve(vaultPath, normalizedPath);
 
   // Ensure the resolved path is within the vault
   // Add trailing separator to prevent prefix attacks (e.g., /vault-secret matching /vault)
