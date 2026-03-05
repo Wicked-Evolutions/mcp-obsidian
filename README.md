@@ -82,7 +82,7 @@ Omitting `vault` defaults to the first vault in the list.
 | `HTTP_MODE` | Run as HTTP server instead of MCP | `false` |
 | `HTTP_PORT` | Port for HTTP server | `3456` |
 
-## Available Tools (33)
+## Available Tools (32)
 
 ### File Operations (9)
 
@@ -161,7 +161,7 @@ Example:
 | `prepend_to_section` | Add content to the beginning of a section |
 | `update_section` | Replace all content within a section |
 
-### Cross-Vault (6)
+### Cross-Vault (5)
 
 | Tool | Description |
 |------|-------------|
@@ -242,7 +242,7 @@ src/
     ├── files.ts          # File ops (9 tools)
     ├── wikilinks.ts      # Wikilink ops (5 tools)
     ├── semantic.ts       # Semantic search (5 tools)
-    ├── crossvault.ts     # Cross-vault ops (6 tools)
+    ├── crossvault.ts     # Cross-vault ops (5 tools)
     ├── sections.ts       # Section editing (3 tools)
     ├── query.ts          # Frontmatter queries (1 tool)
     └── analytics.ts      # Vault health (4 tools)
@@ -264,7 +264,7 @@ src/
 - **Unified multi-vault server**: All tools accept optional `vault` parameter for per-request vault routing. Eliminates need for separate server processes per vault.
 - **New tools**: `query_notes`, `get_vault_health`, `get_orphan_notes`, `get_broken_links`, `get_stale_notes`, `move_note`
 - **Per-vault caching**: Wikilink index and semantic storage are now vault-isolated
-- Total tools: 33
+- Total tools: 32
 
 ### v1.0.0 (2026-01-16)
 - Initial release: file ops, wikilinks, semantic search, cross-vault, section editing
