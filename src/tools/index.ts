@@ -15,6 +15,7 @@ import { crossVaultTools, createCrossVaultHandlers } from './crossvault.js';
 import { sectionTools, createSectionHandlers } from './sections.js';
 import { queryTools, createQueryHandlers } from './query.js';
 import { analyticsTools, createAnalyticsHandlers } from './analytics.js';
+import { cliTools, createCliHandlers } from './cli-tools.js';
 
 /**
  * All tool definitions
@@ -26,7 +27,8 @@ export const allTools: Tool[] = [
   ...crossVaultTools,
   ...sectionTools,
   ...queryTools,
-  ...analyticsTools
+  ...analyticsTools,
+  ...cliTools
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,7 +45,8 @@ export function createAllHandlers(config: Config): Record<string, AnyHandler> {
     ...createCrossVaultHandlers(config),
     ...createSectionHandlers(config),
     ...createQueryHandlers(config),
-    ...createAnalyticsHandlers(config)
+    ...createAnalyticsHandlers(config),
+    ...createCliHandlers(config)
   } as Record<string, AnyHandler>;
 }
 
