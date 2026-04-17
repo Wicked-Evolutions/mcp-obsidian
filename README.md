@@ -2,7 +2,7 @@
 
 Multi-vault Obsidian MCP server — 63 tools for file operations, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.
 
-Two-tier architecture: 30 filesystem tools work without Obsidian running + 33 CLI tools access Obsidian's full runtime API when the app is running (1.12+).
+Two-tier architecture: 30 filesystem tools work without Obsidian running + 33 CLI tools access Obsidian's full runtime API when the app is running with [CLI enabled](https://obsidian.md/help/cli) (1.12+).
 
 ## Install
 
@@ -168,6 +168,10 @@ Comma-separated list. Disabled tools are removed from both the tool list and han
 If Obsidian is not running, CLI tools return a clear error message. All filesystem tools continue to work normally.
 
 > **Note:** The Obsidian CLI currently requires a [Catalyst license](https://obsidian.md/pricing). This may change in the future. Users without Catalyst get full access to the 30 filesystem tools.
+
+### Enabling the Obsidian CLI
+
+To use the 33 CLI tools, you need Obsidian 1.12+ with CLI enabled. In Obsidian: **Settings → General → Enable "Command line interface"**, then follow the prompt to register. See the [Obsidian CLI documentation](https://obsidian.md/help/cli) for install and troubleshooting details.
 
 ## Available Tools (63)
 
