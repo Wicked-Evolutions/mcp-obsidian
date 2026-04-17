@@ -15,6 +15,7 @@ import { crossVaultTools, createCrossVaultHandlers } from './crossvault.js';
 import { sectionTools, createSectionHandlers } from './sections.js';
 import { queryTools, createQueryHandlers } from './query.js';
 import { analyticsTools, createAnalyticsHandlers } from './analytics.js';
+import { fsPromotedTools, createFsPromotedHandlers } from './fs-promoted.js';
 import { cliTools, createCliHandlers } from './cli-tools.js';
 
 /**
@@ -28,6 +29,7 @@ const rawTools: Tool[] = [
   ...sectionTools,
   ...queryTools,
   ...analyticsTools,
+  ...fsPromotedTools,
   ...cliTools
 ];
 
@@ -51,6 +53,7 @@ export function createAllHandlers(config: Config): Record<string, AnyHandler> {
     ...createSectionHandlers(config),
     ...createQueryHandlers(config),
     ...createAnalyticsHandlers(config),
+    ...createFsPromotedHandlers(config),
     ...createCliHandlers(config)
   } as Record<string, AnyHandler>;
 
