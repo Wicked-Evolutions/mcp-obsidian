@@ -567,7 +567,7 @@ Three tools can cause data loss if used incorrectly. Understand their behavior b
 
 ## Known Limitations
 
-- **CLI-only tools require Obsidian running** — 28 tools need Obsidian 1.12+ with [CLI enabled](https://obsidian.md/help/cli). If Obsidian is not running, these tools return a clear error while the 72 always-available tools continue working.
+- **CLI-only tools require Obsidian running** — a subset of tools need Obsidian 1.12+ with [CLI enabled](https://obsidian.md/help/cli). If Obsidian is not running, these tools return a clear error while all other tools continue working.
 - **Unicode filenames** — Files with curly apostrophes (U+2019) and some Unicode characters may fail to resolve.
 - **Vault path changes** — If a vault folder is renamed on disk, the `OBSIDIAN_VAULTS` environment variable must be updated manually.
 
