@@ -167,8 +167,6 @@ Comma-separated list. Disabled tools are removed from both the tool list and han
 
 If Obsidian is not running, CLI tools return a clear error message. All filesystem tools continue to work normally.
 
-> **Note:** The Obsidian CLI currently requires a [Catalyst license](https://obsidian.md/pricing). This may change in the future. Users without Catalyst get full access to the 30 filesystem tools.
-
 ### Enabling the Obsidian CLI
 
 To use the 33 CLI tools, you need Obsidian 1.12+ with CLI enabled. In Obsidian: **Settings → General → Enable "Command line interface"**, then follow the prompt to register. See the [Obsidian CLI documentation](https://obsidian.md/help/cli) for install and troubleshooting details.
@@ -445,7 +443,7 @@ src/
 ## Known Limitations
 
 - **`update_file` replaces entire content** — Use `append_to_section`, `prepend_to_section`, or `update_section` for partial updates. CLI users can also use `search_replace_in_file` for atomic find-and-replace.
-- **CLI tools require Catalyst** — The Obsidian CLI is currently only available to Catalyst license holders. Users without Catalyst get the 30 filesystem tools.
+- **CLI tools require Obsidian running** — The 33 CLI tools need Obsidian 1.12+ with [CLI enabled](https://obsidian.md/help/cli). If Obsidian is not running, these tools return a clear error while the 30 filesystem tools continue working.
 - **Unicode filenames** — Files with curly apostrophes (U+2019) and some Unicode characters may fail to resolve.
 - **Vault path changes** — If a vault folder is renamed on disk, the `OBSIDIAN_VAULTS` environment variable must be updated manually.
 
