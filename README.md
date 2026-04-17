@@ -7,13 +7,13 @@ Two-tier architecture: 30 filesystem tools work without Obsidian running + 33 CL
 ## Install
 
 ```bash
-npm install -g mcp-obsidian
+npm install -g @wickedevolutions/mcp-obsidian
 ```
 
 Or run directly without installing:
 
 ```bash
-npx mcp-obsidian
+npx @wickedevolutions/mcp-obsidian
 ```
 
 Or clone and build from source:
@@ -33,7 +33,7 @@ All clients use the same server config — the only difference is where the conf
 
 ### Server Config Block
 
-**If you installed via npm** (`npm install -g mcp-obsidian`):
+**If you installed via npm** (`npm install -g @wickedevolutions/mcp-obsidian`):
 
 ```json
 {
@@ -390,7 +390,7 @@ curl http://localhost:11434/api/tags
 ### First-Time Indexing
 
 ```bash
-HTTP_MODE=true npx mcp-obsidian &
+HTTP_MODE=true npx @wickedevolutions/mcp-obsidian &
 curl http://localhost:3456/call \
   -H "Content-Type: application/json" \
   -d '{"tool": "index_vault", "args": {"vault": "MyVault"}}'
@@ -399,7 +399,7 @@ curl http://localhost:3456/call \
 ## HTTP Server Mode
 
 ```bash
-HTTP_MODE=true HTTP_PORT=3456 npx mcp-obsidian
+HTTP_MODE=true HTTP_PORT=3456 npx @wickedevolutions/mcp-obsidian
 ```
 
 | Endpoint | Method | Description |
