@@ -6,6 +6,12 @@ Two-tier architecture: 30 filesystem tools work without Obsidian running + 33 CL
 
 ## Install
 
+### Claude Desktop — one click
+
+Download [mcp-obsidian.mcpb](https://github.com/Wicked-Evolutions/mcp-obsidian/releases/latest/download/mcp-obsidian-1.0.0.mcpb), double-click, enter your vault paths. Done.
+
+### npm
+
 ```bash
 npm install -g @wickedevolutions/mcp-obsidian
 ```
@@ -16,7 +22,7 @@ Or run directly without installing:
 npx @wickedevolutions/mcp-obsidian
 ```
 
-Or clone and build from source:
+### From source
 
 ```bash
 git clone https://github.com/Wicked-Evolutions/mcp-obsidian.git
@@ -30,6 +36,12 @@ npm run build
 Works with Claude Code, Claude Desktop, Gemini CLI, Cursor, Windsurf, VS Code, and any MCP-compatible client.
 
 All clients use the same server config — the only difference is where the config file lives.
+
+### Claude Code — quick add
+
+```bash
+claude mcp add -e OBSIDIAN_VAULTS='{"My Vault":"/path/to/vault"}' obsidian -- npx @wickedevolutions/mcp-obsidian
+```
 
 ### Server Config Block
 

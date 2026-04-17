@@ -1,0 +1,38 @@
+{
+  "manifest_version": "0.3",
+  "name": "mcp-obsidian",
+  "version": "1.0.0",
+  "display_name": "Obsidian",
+  "description": "63 tools for Obsidian vault management — file ops, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.",
+  "author": {
+    "name": "Wicked Evolutions",
+    "url": "https://github.com/Wicked-Evolutions"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/Wicked-Evolutions/mcp-obsidian",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wicked-Evolutions/mcp-obsidian"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
+      "env": {
+        "OBSIDIAN_VAULTS": "${user_config.vaults}"
+      }
+    }
+  },
+  "user_config": {
+    "vaults": {
+      "type": "string",
+      "title": "Vault Configuration",
+      "description": "JSON object mapping vault names to paths, e.g. {\"My Vault\":\"/path/to/vault\",\"Work\":\"/path/to/work\"}",
+      "required": true
+    }
+  }
+}
