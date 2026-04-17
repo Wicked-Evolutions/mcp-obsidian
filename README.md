@@ -2,7 +2,7 @@
 
 Multi-vault Obsidian MCP server — full AI operations toolset for file management, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.
 
-Two-tier architecture: 32 filesystem tools work without Obsidian running + 70 CLI tools access Obsidian's full runtime API when the app is running with [CLI enabled](https://obsidian.md/help/cli) (1.12+).
+Two-tier architecture: 72 tools work without Obsidian running + 28 CLI tools access Obsidian's runtime API when the app is running with [CLI enabled](https://obsidian.md/help/cli) (1.12+).
 
 ## Install
 
@@ -188,8 +188,8 @@ Comma-separated list. Disabled tools are removed from both the tool list and han
 
 | Tier | Tools | Requires | Always Available |
 |------|-------|----------|-----------------|
-| **Filesystem** | 32 tools | Node.js only | Yes — works without Obsidian running |
-| **CLI Bridge** | 70 tools | Obsidian 1.12+ running | No — graceful error if app not running |
+| **Filesystem** | 72 tools | Node.js only | Yes — works without Obsidian running |
+| **CLI-only** | 28 tools | Obsidian 1.12+ running | No — graceful error if app not running |
 
 **Filesystem tools** read and write vault files directly. They work whether Obsidian is open or not.
 
@@ -201,9 +201,9 @@ If Obsidian is not running, CLI tools return a clear error message. All filesyst
 
 To use the 33 CLI tools, you need Obsidian 1.12+ with CLI enabled. In Obsidian: **Settings → General → Enable "Command line interface"**, then follow the prompt to register. See the [Obsidian CLI documentation](https://obsidian.md/help/cli) for install and troubleshooting details.
 
-## Available Tools (102)
+## Available Tools (100)
 
-### Filesystem Tools (32 — always available)
+### Always Available (72 tools — no Obsidian required)
 
 #### File Operations (9)
 
@@ -290,12 +290,6 @@ Example:
 | `find_note_by_name` | Find a note by name across vaults |
 | `get_cross_vault_links` | Find wikilinks between vaults |
 
----
-
-### CLI Tools (70 — require Obsidian 1.12+)
-
-These tools access Obsidian's runtime API via the CLI bridge. They require the Obsidian app to be running with CLI enabled. If Obsidian is not running, they return a clear error message.
-
 #### Daily Notes (4)
 
 | Tool | Description |
@@ -309,7 +303,7 @@ These tools access Obsidian's runtime API via the CLI bridge. They require the O
 
 | Tool | Description |
 |------|-------------|
-| `list_tasks` | List tasks with status, file, line number. Filter by done/todo/daily |
+| `list_tasks` | List tasks with status, file, line number. Filter by done/todo |
 | `update_task` | Toggle, complete, or uncomplete a task by file and line |
 
 #### Tags (2)
@@ -319,42 +313,40 @@ These tools access Obsidian's runtime API via the CLI bridge. They require the O
 | `list_tags` | All tags with occurrence counts |
 | `get_tag_info` | Tag details including file list |
 
-#### Properties (2)
+#### Properties (5)
 
 | Tool | Description |
 |------|-------------|
-| `list_properties` | All frontmatter properties with types and counts |
+| `list_properties` | All frontmatter properties with counts |
 | `get_property_values` | All unique values for a property across the vault |
+| `property_read` | Read a single property value from a file |
+| `property_set` | Set a single frontmatter property |
+| `property_remove` | Remove a single frontmatter property |
 
-#### Structure (2)
-
-| Tool | Description |
-|------|-------------|
-| `get_outline` | Heading tree for a file (tree, markdown, or JSON format) |
-| `word_count` | Word and character count |
-
-#### Targeted Editing (5)
+#### Targeted Editing (3)
 
 | Tool | Description |
 |------|-------------|
 | `file_append` | Append content to end of any file |
 | `file_prepend` | Prepend content to start of any file (after frontmatter) |
-| `search_replace_in_file` | Atomic find-and-replace via `app.vault.process()` |
-| `property_set` | Set a single frontmatter property without touching content |
-| `property_remove` | Remove a single frontmatter property without touching content |
+| `search_replace_in_file` | Find-and-replace — only changes matched text |
 
-#### Search (1)
+#### Metadata & Navigation (5)
 
 | Tool | Description |
 |------|-------------|
-| `vault_search` | Full-text search using Obsidian's built-in search engine with context |
+| `list_aliases` | List aliases in the vault or for a specific file |
+| `get_file_info` | File metadata — name, path, size, created/modified dates |
+| `get_folder_info` | Folder metadata — file count, folder count, size |
+| `list_folders` | List folders in the vault, optionally filtered by parent |
+| `read_random` | Read a random note |
 
-#### Backlinks & Links (2)
+#### Structure (2)
 
 | Tool | Description |
 |------|-------------|
-| `get_backlinks` | Backlinks from Obsidian's live index (includes frontmatter references) |
-| `get_outlinks` | Outgoing links from Obsidian's live index |
+| `get_outline` | Heading tree for a file |
+| `word_count` | Word and character count |
 
 #### Vault Structure (3)
 
@@ -364,56 +356,12 @@ These tools access Obsidian's runtime API via the CLI bridge. They require the O
 | `list_deadends` | Files with no outgoing links |
 | `unresolved_links` | Broken/unresolved wikilinks across the vault |
 
-#### Templates (2)
+#### File Management (2)
 
 | Tool | Description |
 |------|-------------|
-| `list_templates` | Available templates |
-| `read_template` | Read template content, optionally with variables resolved |
-
-#### Bases / Databases (2)
-
-| Tool | Description |
-|------|-------------|
-| `list_bases` | List all base files in the vault |
-| `query_base` | Query a base view (JSON, CSV, TSV, markdown, or paths) |
-
-#### Commands (2)
-
-| Tool | Description |
-|------|-------------|
-| `list_commands` | Available Obsidian commands with optional filter |
-| `execute_command` | Run any Obsidian command by ID |
-
-#### History (2)
-
-| Tool | Description |
-|------|-------------|
-| `list_versions` | File version history (local and sync) |
-| `read_version` | Read a historical version of a file |
-
-#### Plugins (1)
-
-| Tool | Description |
-|------|-------------|
-| `list_plugins` | Installed plugins with optional version info |
-
-#### Advanced (1)
-
-| Tool | Description |
-|------|-------------|
-| `eval_obsidian` | Execute JavaScript inside Obsidian's process. Access to the full `app.*` API |
-
-#### Metadata & Navigation (6)
-
-| Tool | Description |
-|------|-------------|
-| `list_aliases` | List aliases in the vault or for a specific file |
-| `get_file_info` | File metadata — name, path, size, created/modified dates |
-| `get_folder_info` | Folder metadata — file count, folder count, size |
-| `list_folders` | List folders in the vault, optionally filtered by parent |
-| `list_recents` | Recently opened files |
-| `read_random` | Read a random note (exploration/serendipity) |
+| `rename_file` | Rename a file and update all wikilinks |
+| `move_file` | Move a file and update all wikilinks |
 
 #### Bookmarks (2)
 
@@ -422,40 +370,77 @@ These tools access Obsidian's runtime API via the CLI bridge. They require the O
 | `add_bookmark` | Bookmark a file, folder, search query, or URL |
 | `list_bookmarks` | List all bookmarks |
 
-#### File Creation & Rename (3)
-
-| Tool | Description |
-|------|-------------|
-| `create_from_template` | Create a new file using an Obsidian template |
-| `rename_file` | Rename via Obsidian engine (updates internal link cache) |
-| `move_file` | Move via Obsidian engine (updates internal link cache) |
-
-#### Version Management (3)
-
-| Tool | Description |
-|------|-------------|
-| `diff_versions` | Diff between file versions (local or sync) |
-| `restore_version` | Restore a file to a previous history version |
-| `list_files_with_history` | List files that have version history |
-
-#### Properties (1)
-
-| Tool | Description |
-|------|-------------|
-| `property_read` | Read a single frontmatter property value from a file |
-
 #### Search (1)
 
 | Tool | Description |
 |------|-------------|
-| `search_with_context` | Search with matching line context from Obsidian's search engine |
+| `search_with_context` | Search vault with matching line context |
 
-#### Plugin Management (4)
+#### Plugins (read-only) (3)
 
 | Tool | Description |
 |------|-------------|
+| `list_plugins` | List installed plugins |
 | `get_plugin_info` | Get detailed info about a specific plugin |
 | `list_enabled_plugins` | List only enabled plugins |
+
+#### Snippets & Themes (read-only) (3)
+
+| Tool | Description |
+|------|-------------|
+| `list_snippets` | List installed CSS snippets |
+| `list_themes` | List installed themes |
+| `get_active_theme` | Get the active theme |
+
+#### Vault & Workspace (3)
+
+| Tool | Description |
+|------|-------------|
+| `get_vault_info` | Vault metadata — name, path, file/folder count, size |
+| `get_workspace` | Workspace tree showing open panes and layout |
+| `list_bases` | List all .base files in the vault |
+
+---
+
+### CLI-Only (28 tools — require Obsidian 1.12+)
+
+These tools access Obsidian's runtime state, plugin systems, or internal databases. They require the Obsidian app to be running with [CLI enabled](https://obsidian.md/help/cli). If Obsidian is not running, they return a clear error message.
+
+#### Commands (2)
+
+| Tool | Description |
+|------|-------------|
+| `list_commands` | Available Obsidian commands with optional filter |
+| `execute_command` | Run any Obsidian command by ID |
+
+#### Obsidian Search (1)
+
+| Tool | Description |
+|------|-------------|
+| `vault_search` | Full-text search using Obsidian's search engine (supports `file:`, `tag:`, `path:` operators) |
+
+#### Templates (3)
+
+| Tool | Description |
+|------|-------------|
+| `list_templates` | List available templates |
+| `read_template` | Read template content, optionally with variables resolved |
+| `create_from_template` | Create a new file using an Obsidian template |
+
+#### Version History (5)
+
+| Tool | Description |
+|------|-------------|
+| `list_versions` | File version history (local and sync) |
+| `read_version` | Read a historical version of a file |
+| `diff_versions` | Diff between file versions |
+| `restore_version` | Restore a file to a previous version |
+| `list_files_with_history` | List files that have version history |
+
+#### Plugin State Changes (2)
+
+| Tool | Description |
+|------|-------------|
 | `enable_plugin` | Enable an installed plugin |
 | `disable_plugin` | Disable a plugin |
 
@@ -467,53 +452,39 @@ These tools access Obsidian's runtime API via the CLI bridge. They require the O
 | `sync_history` | Sync version history for a file |
 | `sync_read_version` | Read a specific sync version |
 
-#### CSS Snippets (4)
+#### Snippet & Theme State Changes (3)
 
 | Tool | Description |
 |------|-------------|
-| `list_snippets` | List installed CSS snippets |
-| `list_enabled_snippets` | List enabled snippets |
+| `list_enabled_snippets` | List enabled CSS snippets |
 | `enable_snippet` | Enable a CSS snippet |
 | `disable_snippet` | Disable a CSS snippet |
 
-#### Themes (3)
-
 | Tool | Description |
 |------|-------------|
-| `list_themes` | List installed themes |
-| `get_active_theme` | Get the active theme |
 | `set_theme` | Set the active theme |
 
-#### Bases (2)
+#### Bases (3)
 
 | Tool | Description |
 |------|-------------|
+| `query_base` | Query a base view (JSON, CSV, TSV, markdown, or paths) |
 | `create_base_item` | Create a new item in a base/database |
 | `list_base_views` | List views in a base file |
 
-#### Vault Info (2)
+#### Other (6)
 
 | Tool | Description |
 |------|-------------|
-| `get_vault_info` | Vault metadata — name, path, file/folder count, size |
+| `eval_obsidian` | Execute JavaScript inside Obsidian's process |
+| `list_recents` | Recently opened files |
 | `list_known_vaults` | List all vaults known to Obsidian with paths |
-
-#### Workspace (1)
-
-| Tool | Description |
-|------|-------------|
-| `get_workspace` | Workspace tree showing open panes and layout |
-
-#### Hotkeys (2)
-
-| Tool | Description |
-|------|-------------|
 | `get_hotkey` | Get the hotkey for a specific command |
 | `list_hotkeys` | List all hotkey bindings |
 
 ## Semantic Search (Optional)
 
-Semantic search requires [Ollama](https://ollama.ai/) running locally. All other tools (96 of 102) work without Ollama.
+Semantic search requires [Ollama](https://ollama.ai/) running locally. All other tools work without Ollama.
 
 ```bash
 # Install (macOS)
@@ -574,7 +545,8 @@ src/
     ├── sections.ts       # Section editing (3 tools)
     ├── query.ts          # Frontmatter queries (1 tool)
     ├── analytics.ts      # Vault health (4 tools)
-    └── cli-tools.ts      # CLI-based tools (70 tools)
+    ├── fs-promoted.ts    # Filesystem-promoted tools (40 tools)
+    └── cli-tools.ts      # CLI-only tools (28 tools)
 ```
 
 ## Safety Notes
