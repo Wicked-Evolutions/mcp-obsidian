@@ -1,0 +1,12 @@
+src/
+.github/
+.env
+.env.*
+!.env.example
+tsconfig.json
+*.log
+.DS_Store
+data/
+node_modules/
+CONTRIBUTING.md
+SECURITY.md

@@ -1,11 +1,11 @@
 {
-  "name": "@influencentricity/mcp-obsidian",
-  "version": "2.2.0",
-  "description": "Unified multi-vault Obsidian MCP server with 63 tools. Filesystem access (always available) + CLI bridge to Obsidian's runtime API (1.12+). File ops, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, bases, and atomic search-replace.",
+  "name": "mcp-obsidian",
+  "version": "1.0.0",
+  "description": "Multi-vault Obsidian MCP server — 63 tools for file ops, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more. Filesystem tools always available + CLI bridge for Obsidian 1.12+.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "mcp-obsidian": "./dist/index.js"
+    "mcp-obsidian": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -13,26 +13,38 @@
     "start": "node dist/index.js",
     "prepare": "npm run build"
   },
+  "files": [
+    "dist/",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    ".env.example"
+  ],
   "keywords": [
     "mcp",
     "obsidian",
+    "model-context-protocol",
     "knowledge-base",
-    "rag",
     "semantic-search",
     "wikilinks",
-    "influencentricity",
-    "claude"
+    "vault",
+    "markdown",
+    "claude",
+    "ai"
   ],
-  "author": "Influencentricity",
+  "author": "Wicked Evolutions",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Influencentricity/mcp-obsidian.git"
+    "url": "https://github.com/Wicked-Evolutions/mcp-obsidian.git"
   },
   "bugs": {
-    "url": "https://github.com/Influencentricity/mcp-obsidian/issues"
+    "url": "https://github.com/Wicked-Evolutions/mcp-obsidian/issues"
   },
-  "homepage": "https://github.com/Influencentricity/mcp-obsidian#readme",
+  "homepage": "https://github.com/Wicked-Evolutions/mcp-obsidian#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.23.0",
     "better-sqlite3": "^12.5.0",

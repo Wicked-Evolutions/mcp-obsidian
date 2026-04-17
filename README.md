@@ -1,8 +1,140 @@
-# MCP Obsidian
+# mcp-obsidian
 
-A Model Context Protocol (MCP) server for Obsidian vault integration. 63 tools across two tiers — filesystem tools that work without Obsidian running, and CLI-based tools that access Obsidian's full runtime API when the app is running.
+Multi-vault Obsidian MCP server — 63 tools for file operations, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.
 
-Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client.
+Two-tier architecture: 30 filesystem tools work without Obsidian running + 33 CLI tools access Obsidian's full runtime API when the app is running (1.12+).
+
+## Install
+
+```bash
+npm install -g mcp-obsidian
+```
+
+Or run directly without installing:
+
+```bash
+npx mcp-obsidian
+```
+
+Or clone and build from source:
+
+```bash
+git clone https://github.com/Wicked-Evolutions/mcp-obsidian.git
+cd mcp-obsidian
+npm install
+npm run build
+```
+
+## Setup
+
+Works with Claude Code, Claude Desktop, Gemini CLI, Cursor, Windsurf, VS Code, and any MCP-compatible client.
+
+All clients use the same server config — the only difference is where the config file lives.
+
+### Server Config Block
+
+**If you installed via npm** (`npm install -g mcp-obsidian`):
+
+```json
+{
+  "mcpServers": {
+    "obsidian": {
+      "command": "npx",
+      "args": ["mcp-obsidian"],
+      "env": {
+        "OBSIDIAN_VAULTS": "{\"My Vault\":\"/path/to/your/vault\"}"
+      }
+    }
+  }
+}
+```
+
+**If you cloned and built from source:**
+
+```json
+{
+  "mcpServers": {
+    "obsidian": {
+      "command": "node",
+      "args": ["/path/to/mcp-obsidian/dist/index.js"],
+      "env": {
+        "OBSIDIAN_VAULTS": "{\"My Vault\":\"/path/to/your/vault\"}"
+      }
+    }
+  }
+}
+```
+
+### Where to Put the Config
+
+| Client | Config file |
+|--------|-------------|
+| **Claude Code** | `.mcp.json` in your project root, or `~/.mcp.json` for global access |
+| **Claude Desktop** | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
+| **Gemini CLI** | `~/.gemini/settings.json` (add the server block inside the existing `mcpServers` object) |
+| **Cursor** | `.cursor/mcp.json` in project root |
+| **Windsurf** | `~/.codeium/windsurf/mcp_config.json` |
+| **VS Code (Copilot)** | `.vscode/mcp.json` in project root |
+
+Any AI client or IDE that supports the Model Context Protocol can use mcp-obsidian — add the server config block to your client's MCP configuration.
+
+### Multiple Vaults
+
+Pass multiple vaults as a JSON object in `OBSIDIAN_VAULTS`:
+
+```json
+{
+  "OBSIDIAN_VAULTS": "{\"Work\":\"/path/to/work-vault\",\"Personal\":\"/path/to/personal-vault\",\"Notes\":\"/path/to/notes\"}"
+}
+```
+
+Then use the `vault` parameter on any tool call:
+
+```json
+{ "tool": "read_file", "args": { "vault": "Work", "path": "my-note.md" } }
+```
+
+Omitting `vault` defaults to the first vault in the list.
+
+### Single Vault (Alternative)
+
+For a single vault, you can use the simpler environment variables instead of `OBSIDIAN_VAULTS`:
+
+```json
+{
+  "env": {
+    "OBSIDIAN_VAULT_PATH": "/path/to/your/vault",
+    "OBSIDIAN_VAULT_NAME": "My Vault"
+  }
+}
+```
+
+### Disabling Tools
+
+To prevent specific tools from being exposed to MCP clients, set `OBSIDIAN_DISABLED_TOOLS` in the env block:
+
+```json
+{
+  "env": {
+    "OBSIDIAN_DISABLED_TOOLS": "search_replace_in_file,eval_obsidian"
+  }
+}
+```
+
+Comma-separated list. Disabled tools are removed from both the tool list and handler registry at startup.
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OBSIDIAN_VAULTS` | JSON object: `{"name":"path",...}` for multi-vault | - |
+| `OBSIDIAN_VAULT_PATH` | Path to single vault (alternative to `OBSIDIAN_VAULTS`) | - |
+| `OBSIDIAN_VAULT_NAME` | Display name for single vault | - |
+| `OBSIDIAN_DISABLED_TOOLS` | Comma-separated list of tools to disable | - |
+| `OLLAMA_HOST` | Ollama API endpoint | `http://localhost:11434` |
+| `OLLAMA_EMBEDDING_MODEL` | Model for embeddings | `nomic-embed-text` |
+| `HTTP_MODE` | Run as HTTP server instead of STDIO | `false` |
+| `HTTP_PORT` | Port for HTTP server | `3456` |
 
 ## Features
 
@@ -17,83 +149,12 @@ Works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible
 - **Cross-Vault Search**: Search across all vaults simultaneously
 - **Daily Notes**: Read, append, prepend to daily notes (CLI)
 - **Tasks**: List and update tasks across the vault (CLI)
-- **Atomic Editing**: `search_replace_in_file` uses Obsidian's `app.vault.process()` for safe, targeted text changes (CLI)
 - **Properties**: List all frontmatter properties with types, get all unique values for any property (CLI)
-- **Templates, Bases, Commands, History, Plugins**: Full access to Obsidian's internal features (CLI)
-
-## Prerequisites
-
-- Node.js 18+
-- Obsidian vault(s)
-- [Ollama](https://ollama.ai/) running locally (optional — only needed for semantic search)
-- Obsidian 1.12+ with CLI enabled (optional — only needed for CLI-tier tools; currently requires [Catalyst license](https://obsidian.md/pricing))
-
-## Installation
-
-```bash
-git clone https://github.com/Influencentricity/mcp-obsidian.git
-cd mcp-obsidian
-npm install
-npm run build
-```
-
-## Configuration
-
-### Multi-Vault (Recommended)
-
-```json
-{
-  "mcpServers": {
-    "obsidian": {
-      "command": "node",
-      "args": ["/path/to/mcp-obsidian/dist/index.js"],
-      "env": {
-        "OBSIDIAN_VAULTS": "{\"Main\":\"/path/to/vault1\",\"Work\":\"/path/to/vault2\"}"
-      }
-    }
-  }
-}
-```
-
-Use the `vault` parameter on any tool call:
-```json
-{ "tool": "read_file", "args": { "vault": "Work", "path": "my-note.md" } }
-```
-
-Omitting `vault` defaults to the first vault in the list.
-
-### Single Vault
-
-```json
-{
-  "mcpServers": {
-    "obsidian": {
-      "command": "node",
-      "args": ["/path/to/mcp-obsidian/dist/index.js"],
-      "env": {
-        "OBSIDIAN_VAULT_PATH": "/path/to/your/vault",
-        "OBSIDIAN_VAULT_NAME": "My Vault"
-      }
-    }
-  }
-}
-```
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OBSIDIAN_VAULTS` | JSON object: `{"name":"path",...}` for multi-vault | - |
-| `OBSIDIAN_VAULT_PATH` | Path to single vault (alternative to OBSIDIAN_VAULTS) | - |
-| `OBSIDIAN_VAULT_NAME` | Display name for single vault | - |
-| `OLLAMA_HOST` | Ollama API endpoint | `http://localhost:11434` |
-| `OLLAMA_EMBEDDING_MODEL` | Model for embeddings | `nomic-embed-text` |
-| `HTTP_MODE` | Run as HTTP server instead of MCP | `false` |
-| `HTTP_PORT` | Port for HTTP server | `3456` |
+- **Templates & Bases**: Access templates and Obsidian database views (CLI)
+- **Commands & History**: Execute Obsidian commands, access file version history (CLI)
+- **Tool Filtering**: Disable specific tools via `OBSIDIAN_DISABLED_TOOLS` env var
 
 ## Two-Tier Architecture
-
-The server operates in two tiers:
 
 | Tier | Tools | Requires | Always Available |
 |------|-------|----------|-----------------|
@@ -119,7 +180,7 @@ If Obsidian is not running, CLI tools return a clear error message. All filesyst
 | `list_files` | List all markdown files in a vault |
 | `read_file` | Read file contents with frontmatter |
 | `create_file` | Create a new file with optional frontmatter |
-| `update_file` | Overwrite file contents (use `search_replace_in_file` for partial changes) |
+| `update_file` | Overwrite file contents (use section editing for partial changes) |
 | `delete_file` | Delete a file |
 | `get_frontmatter` | Read only frontmatter metadata |
 | `update_frontmatter` | Merge updates into frontmatter |
@@ -242,13 +303,11 @@ These tools access Obsidian's runtime API via the CLI bridge. They require the O
 
 #### Targeted Editing (5)
 
-Safe alternatives to `update_file` for partial changes:
-
 | Tool | Description |
 |------|-------------|
 | `file_append` | Append content to end of any file |
 | `file_prepend` | Prepend content to start of any file (after frontmatter) |
-| `search_replace_in_file` | Atomic find-and-replace via `app.vault.process()` — only changes matched text |
+| `search_replace_in_file` | Atomic find-and-replace via `app.vault.process()` |
 | `property_set` | Set a single frontmatter property without touching content |
 | `property_remove` | Remove a single frontmatter property without touching content |
 
@@ -313,7 +372,7 @@ Safe alternatives to `update_file` for partial changes:
 |------|-------------|
 | `eval_obsidian` | Execute JavaScript inside Obsidian's process. Access to the full `app.*` API |
 
-## Ollama Setup (Optional — Semantic Search Only)
+## Semantic Search (Optional)
 
 Semantic search requires [Ollama](https://ollama.ai/) running locally. All other tools (57 of 63) work without Ollama.
 
@@ -324,9 +383,6 @@ brew install ollama
 # Pull embedding model (~274MB)
 ollama pull nomic-embed-text
 
-# Optional: query expansion model (~4.7GB)
-ollama pull qwen2.5:7b
-
 # Verify
 curl http://localhost:11434/api/tags
 ```
@@ -334,18 +390,16 @@ curl http://localhost:11434/api/tags
 ### First-Time Indexing
 
 ```bash
-HTTP_MODE=true node dist/index.js &
+HTTP_MODE=true npx mcp-obsidian &
 curl http://localhost:3456/call \
   -H "Content-Type: application/json" \
   -d '{"tool": "index_vault", "args": {"vault": "MyVault"}}'
 ```
 
-Indexing creates heading-based chunks with vector embeddings (768d) and FTS5 full-text index, stored in SQLite alongside your vault.
-
 ## HTTP Server Mode
 
 ```bash
-HTTP_MODE=true HTTP_PORT=3456 node dist/index.js
+HTTP_MODE=true HTTP_PORT=3456 npx mcp-obsidian
 ```
 
 | Endpoint | Method | Description |
@@ -386,41 +440,11 @@ src/
 
 ## Known Limitations
 
-- **`update_file` replaces entire content** — Use `search_replace_in_file` (CLI), `append_to_section`, `prepend_to_section`, or `update_section` for partial updates.
+- **`update_file` replaces entire content** — Use `append_to_section`, `prepend_to_section`, or `update_section` for partial updates. CLI users can also use `search_replace_in_file` for atomic find-and-replace.
 - **CLI tools require Catalyst** — The Obsidian CLI is currently only available to Catalyst license holders. Users without Catalyst get the 30 filesystem tools.
 - **Unicode filenames** — Files with curly apostrophes (U+2019) and some Unicode characters may fail to resolve.
 - **Vault path changes** — If a vault folder is renamed on disk, the `OBSIDIAN_VAULTS` environment variable must be updated manually.
 
-## Changelog
-
-### v2.2.0 (2026-03-07)
-- **CLI bridge**: 33 new tools accessing Obsidian's runtime API via the 1.12+ CLI. Two-tier architecture — filesystem tools always available, CLI tools when Obsidian is running.
-- **Targeted editing**: `search_replace_in_file` (atomic find-and-replace via `app.vault.process()`), `file_append`, `file_prepend`, `property_set`, `property_remove`
-- **Daily notes**: `daily_read`, `daily_append`, `daily_prepend`, `daily_path`
-- **Tasks**: `list_tasks`, `update_task`
-- **Properties**: `list_properties`, `get_property_values` (cross-vault property aggregation from metadata cache)
-- **Vault structure**: `list_orphans`, `list_deadends`, `unresolved_links`, `get_outline`, `vault_search`
-- **Templates & Bases**: `list_templates`, `read_template`, `list_bases`, `query_base`
-- **Commands & History**: `list_commands`, `execute_command`, `list_versions`, `read_version`
-- **Advanced**: `eval_obsidian` — execute arbitrary JavaScript inside Obsidian's process
-- Total tools: 63 (30 filesystem + 33 CLI)
-
-### v2.1.1 (2026-03-05)
-- **Fix: `create_file` frontmatter serialization**: Frontmatter passed as JSON string no longer produces corrupt YAML.
-- **Fix: Unicode filename handling**: Added NFC/NFD normalization fallback in path resolution.
-
-### v2.1.0 (2026-02-25)
-- **Security hardening**: TOCTOU race condition fixes, FTS injection prevention, timing attack mitigations
-
-### v2.0.0 (2026-02-23)
-- **Unified multi-vault server**: All tools accept optional `vault` parameter
-- **New tools**: `query_notes`, `get_vault_health`, `get_orphan_notes`, `get_broken_links`, `get_stale_notes`, `move_note`
-- Total tools: 32
-
-### v1.0.0 (2026-01-16)
-- Initial release: file ops, wikilinks, semantic search, cross-vault, section editing
-- 27 tools across 5 modules
-
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE) for details.
