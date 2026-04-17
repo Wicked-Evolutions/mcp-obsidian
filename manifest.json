@@ -3,7 +3,7 @@
   "name": "mcp-obsidian",
   "version": "1.1.0",
   "display_name": "Obsidian",
-  "description": "102 tools for Obsidian vault management — file ops, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.",
+  "description": "Full AI operations toolset for Obsidian vault management — file ops, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.",
   "author": {
     "name": "Wicked Evolutions",
     "url": "https://github.com/Wicked-Evolutions"

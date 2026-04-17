@@ -1,6 +1,6 @@
 # mcp-obsidian
 
-Multi-vault Obsidian MCP server — 102 tools for file operations, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.
+Multi-vault Obsidian MCP server — full AI operations toolset for file management, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.
 
 Two-tier architecture: 32 filesystem tools work without Obsidian running + 70 CLI tools access Obsidian's full runtime API when the app is running with [CLI enabled](https://obsidian.md/help/cli) (1.12+).
 
