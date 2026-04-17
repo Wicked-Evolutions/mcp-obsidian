@@ -1,8 +1,8 @@
 # mcp-obsidian
 
-Multi-vault Obsidian MCP server — 63 tools for file operations, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.
+Multi-vault Obsidian MCP server — 102 tools for file operations, wikilinks, semantic search, frontmatter queries, daily notes, tasks, properties, templates, and more.
 
-Two-tier architecture: 30 filesystem tools work without Obsidian running + 33 CLI tools access Obsidian's full runtime API when the app is running with [CLI enabled](https://obsidian.md/help/cli) (1.12+).
+Two-tier architecture: 32 filesystem tools work without Obsidian running + 70 CLI tools access Obsidian's full runtime API when the app is running with [CLI enabled](https://obsidian.md/help/cli) (1.12+).
 
 ## Install
 
@@ -170,8 +170,8 @@ Comma-separated list. Disabled tools are removed from both the tool list and han
 
 | Tier | Tools | Requires | Always Available |
 |------|-------|----------|-----------------|
-| **Filesystem** | 30 tools | Node.js only | Yes — works without Obsidian running |
-| **CLI Bridge** | 33 tools | Obsidian 1.12+ running | No — graceful error if app not running |
+| **Filesystem** | 32 tools | Node.js only | Yes — works without Obsidian running |
+| **CLI Bridge** | 70 tools | Obsidian 1.12+ running | No — graceful error if app not running |
 
 **Filesystem tools** read and write vault files directly. They work whether Obsidian is open or not.
 
@@ -183,9 +183,9 @@ If Obsidian is not running, CLI tools return a clear error message. All filesyst
 
 To use the 33 CLI tools, you need Obsidian 1.12+ with CLI enabled. In Obsidian: **Settings → General → Enable "Command line interface"**, then follow the prompt to register. See the [Obsidian CLI documentation](https://obsidian.md/help/cli) for install and troubleshooting details.
 
-## Available Tools (63)
+## Available Tools (102)
 
-### Filesystem Tools (30 — always available)
+### Filesystem Tools (32 — always available)
 
 #### File Operations (9)
 
@@ -274,7 +274,7 @@ Example:
 
 ---
 
-### CLI Tools (33 — require Obsidian 1.12+)
+### CLI Tools (70 — require Obsidian 1.12+)
 
 These tools access Obsidian's runtime API via the CLI bridge. They require the Obsidian app to be running with CLI enabled. If Obsidian is not running, they return a clear error message.
 
@@ -386,9 +386,116 @@ These tools access Obsidian's runtime API via the CLI bridge. They require the O
 |------|-------------|
 | `eval_obsidian` | Execute JavaScript inside Obsidian's process. Access to the full `app.*` API |
 
+#### Metadata & Navigation (6)
+
+| Tool | Description |
+|------|-------------|
+| `list_aliases` | List aliases in the vault or for a specific file |
+| `get_file_info` | File metadata — name, path, size, created/modified dates |
+| `get_folder_info` | Folder metadata — file count, folder count, size |
+| `list_folders` | List folders in the vault, optionally filtered by parent |
+| `list_recents` | Recently opened files |
+| `read_random` | Read a random note (exploration/serendipity) |
+
+#### Bookmarks (2)
+
+| Tool | Description |
+|------|-------------|
+| `add_bookmark` | Bookmark a file, folder, search query, or URL |
+| `list_bookmarks` | List all bookmarks |
+
+#### File Creation & Rename (3)
+
+| Tool | Description |
+|------|-------------|
+| `create_from_template` | Create a new file using an Obsidian template |
+| `rename_file` | Rename via Obsidian engine (updates internal link cache) |
+| `move_file` | Move via Obsidian engine (updates internal link cache) |
+
+#### Version Management (3)
+
+| Tool | Description |
+|------|-------------|
+| `diff_versions` | Diff between file versions (local or sync) |
+| `restore_version` | Restore a file to a previous history version |
+| `list_files_with_history` | List files that have version history |
+
+#### Properties (1)
+
+| Tool | Description |
+|------|-------------|
+| `property_read` | Read a single frontmatter property value from a file |
+
+#### Search (1)
+
+| Tool | Description |
+|------|-------------|
+| `search_with_context` | Search with matching line context from Obsidian's search engine |
+
+#### Plugin Management (4)
+
+| Tool | Description |
+|------|-------------|
+| `get_plugin_info` | Get detailed info about a specific plugin |
+| `list_enabled_plugins` | List only enabled plugins |
+| `enable_plugin` | Enable an installed plugin |
+| `disable_plugin` | Disable a plugin |
+
+#### Sync (3)
+
+| Tool | Description |
+|------|-------------|
+| `sync_status` | Sync status (paused/active/connected) |
+| `sync_history` | Sync version history for a file |
+| `sync_read_version` | Read a specific sync version |
+
+#### CSS Snippets (4)
+
+| Tool | Description |
+|------|-------------|
+| `list_snippets` | List installed CSS snippets |
+| `list_enabled_snippets` | List enabled snippets |
+| `enable_snippet` | Enable a CSS snippet |
+| `disable_snippet` | Disable a CSS snippet |
+
+#### Themes (3)
+
+| Tool | Description |
+|------|-------------|
+| `list_themes` | List installed themes |
+| `get_active_theme` | Get the active theme |
+| `set_theme` | Set the active theme |
+
+#### Bases (2)
+
+| Tool | Description |
+|------|-------------|
+| `create_base_item` | Create a new item in a base/database |
+| `list_base_views` | List views in a base file |
+
+#### Vault Info (2)
+
+| Tool | Description |
+|------|-------------|
+| `get_vault_info` | Vault metadata — name, path, file/folder count, size |
+| `list_known_vaults` | List all vaults known to Obsidian with paths |
+
+#### Workspace (1)
+
+| Tool | Description |
+|------|-------------|
+| `get_workspace` | Workspace tree showing open panes and layout |
+
+#### Hotkeys (2)
+
+| Tool | Description |
+|------|-------------|
+| `get_hotkey` | Get the hotkey for a specific command |
+| `list_hotkeys` | List all hotkey bindings |
+
 ## Semantic Search (Optional)
 
-Semantic search requires [Ollama](https://ollama.ai/) running locally. All other tools (57 of 63) work without Ollama.
+Semantic search requires [Ollama](https://ollama.ai/) running locally. All other tools (96 of 102) work without Ollama.
 
 ```bash
 # Install (macOS)
@@ -449,7 +556,7 @@ src/
     ├── sections.ts       # Section editing (3 tools)
     ├── query.ts          # Frontmatter queries (1 tool)
     ├── analytics.ts      # Vault health (4 tools)
-    └── cli-tools.ts      # CLI-based tools (33 tools)
+    └── cli-tools.ts      # CLI-based tools (70 tools)
 ```
 
 ## Safety Notes

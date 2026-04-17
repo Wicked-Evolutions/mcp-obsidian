@@ -8,7 +8,7 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { Config } from '../config.js';
 import { ToolResponse } from '../types/index.js';
-import { execCliForVault, evalInObsidian, isCliAvailable } from '../cli/bridge.js';
+import { execCli, execCliForVault, evalInObsidian, isCliAvailable } from '../cli/bridge.js';
 
 const vaultParam = {
   type: 'string' as const,
@@ -1467,8 +1467,8 @@ export function createCliHandlers(config: Config): Record<string, (args: any) =>
     },
 
     list_known_vaults: async (_args) => {
-      const cliArgs: string[] = ['verbose'];
-      const result = await execCliForVault(config, undefined, 'vaults', cliArgs);
+      const cliArgs = ['vaults', 'verbose'];
+      const result = await execCli(cliArgs);
       return ok(result || 'No vaults found.');
     },
 

@@ -61,7 +61,15 @@ export function execCli(args: string[], timeoutMs: number = 10000): Promise<stri
         !line.includes('Loading updated app package') &&
         !line.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} Loading/)
       );
-      resolve(lines.join('\n').trim());
+      const result = lines.join('\n').trim();
+
+      // Obsidian CLI exits 0 even on errors — check for Error: prefix in output
+      if (result.startsWith('Error:')) {
+        reject(new Error(result));
+        return;
+      }
+
+      resolve(result);
     });
   });
 }
