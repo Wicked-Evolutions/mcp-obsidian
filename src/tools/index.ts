@@ -18,9 +18,9 @@ import { analyticsTools, createAnalyticsHandlers } from './analytics.js';
 import { cliTools, createCliHandlers } from './cli-tools.js';
 
 /**
- * All tool definitions
+ * All tool definitions (unfiltered)
  */
-export const allTools: Tool[] = [
+const rawTools: Tool[] = [
   ...fileTools,
   ...wikilinkTools,
   ...semanticTools,
@@ -31,14 +31,19 @@ export const allTools: Tool[] = [
   ...cliTools
 ];
 
+/**
+ * All tool definitions, filtered by OBSIDIAN_DISABLED_TOOLS env var
+ */
+export let allTools: Tool[] = rawTools;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyHandler = (args: any) => Promise<ToolResponse>;
 
 /**
- * Create all tool handlers for a given config
+ * Create all tool handlers for a given config, excluding disabled tools
  */
 export function createAllHandlers(config: Config): Record<string, AnyHandler> {
-  return {
+  const handlers = {
     ...createFileHandlers(config),
     ...createWikilinkHandlers(config),
     ...createSemanticHandlers(config),
@@ -48,6 +53,16 @@ export function createAllHandlers(config: Config): Record<string, AnyHandler> {
     ...createAnalyticsHandlers(config),
     ...createCliHandlers(config)
   } as Record<string, AnyHandler>;
+
+  // Filter out disabled tools
+  if (config.disabledTools.size > 0) {
+    allTools = rawTools.filter(t => !config.disabledTools.has(t.name));
+    for (const name of config.disabledTools) {
+      delete handlers[name];
+    }
+  }
+
+  return handlers;
 }
 
 /**

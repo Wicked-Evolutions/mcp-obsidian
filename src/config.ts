@@ -14,9 +14,18 @@ export interface Config {
     host: string;
     model: string;
   };
+  disabledTools: Set<string>;
 }
 
 export function loadConfig(): Config {
+  // Parse disabled tools from env (comma-separated list)
+  const disabledTools = new Set(
+    (process.env.OBSIDIAN_DISABLED_TOOLS || '')
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean)
+  );
+
   // Check for multi-vault mode first
   const vaultsJson = process.env.OBSIDIAN_VAULTS;
 
@@ -38,7 +47,8 @@ export function loadConfig(): Config {
         ollama: {
           host: process.env.OLLAMA_HOST || 'http://localhost:11434',
           model: process.env.OLLAMA_EMBEDDING_MODEL || 'nomic-embed-text'
-        }
+        },
+        disabledTools
       };
     } catch (e) {
       console.error('Failed to parse OBSIDIAN_VAULTS:', e);
@@ -60,7 +70,8 @@ export function loadConfig(): Config {
     ollama: {
       host: process.env.OLLAMA_HOST || 'http://localhost:11434',
       model: process.env.OLLAMA_EMBEDDING_MODEL || 'nomic-embed-text'
-    }
+    },
+    disabledTools
   };
 }
 
