@@ -684,13 +684,21 @@ export function createCliHandlers(config: Config): Record<string, (args: any) =>
       const escReplace = args.replace.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
 
       const replaceMethod = args.all ? 'replaceAll' : 'replace';
-      const code = `(function(){var f=${fileRef};if(!f)return "ERROR: File not found";return app.vault.process(f,function(c){var n=c.${replaceMethod}("${escSearch}","${escReplace}");if(n===c)return "NO_CHANGE";return n})})()`;
+      // SAFETY: The process() callback MUST return valid file content.
+      // Previously, returning "NO_CHANGE" when the search text wasn't found
+      // caused Obsidian to write that literal string as the file content,
+      // destroying the file (bug #4).
+      //
+      // Fix: The callback always returns valid content (either replaced or
+      // original). A closure flag tracks whether a change occurred. The
+      // async IIFE awaits process() then returns the flag status.
+      const code = `(async function(){var f=${fileRef};if(!f)return "ERROR: File not found";var changed=false;await app.vault.process(f,function(c){var n=c.${replaceMethod}("${escSearch}","${escReplace}");if(n!==c){changed=true;return n}return c});return changed?"REPLACED":"NO_MATCH"})()`;
 
       const result = await evalInObsidian(config, args.vault, code, 15000);
       if (result === 'ERROR: File not found') {
         return err('File not found.');
       }
-      if (result === 'NO_CHANGE') {
+      if (result === 'NO_MATCH') {
         return err('Search text not found in file. No changes made.');
       }
       return ok('Text replaced successfully.');
