@@ -452,9 +452,24 @@ src/
     └── cli-tools.ts      # CLI-based tools (33 tools)
 ```
 
+## Safety Notes
+
+Three tools can cause data loss if used incorrectly. Understand their behavior before use.
+
+### `search_replace_in_file` — known bug ([#4](https://github.com/Wicked-Evolutions/mcp-obsidian/issues/4))
+
+**Bug:** When the search text is not found in the file, the tool writes the literal string `"NO_CHANGE"` (9 bytes) as the file content, destroying the original. This is a code bug, not intended behavior. **We recommend disabling this tool** via `OBSIDIAN_DISABLED_TOOLS=search_replace_in_file` until the fix ships.
+
+### `update_section` on H1 headings — by design ([#5](https://github.com/Wicked-Evolutions/mcp-obsidian/issues/5))
+
+**Caution:** When targeting an H1 heading (`# Title`), the section scope extends to the end of the file — because no heading of equal or higher level exists to close the section. This replaces everything below the title. Use `update_section` only on H2 and lower headings. For H1-level content, use `update_file` with full content instead.
+
+### `update_file` — by design ([#6](https://github.com/Wicked-Evolutions/mcp-obsidian/issues/6))
+
+**Caution:** This tool replaces the entire file body (frontmatter is preserved if the `frontmatter` parameter is omitted). For partial updates, use `append_to_section`, `prepend_to_section`, `update_section`, or the CLI tools `file_append` and `file_prepend`.
+
 ## Known Limitations
 
-- **`update_file` replaces entire content** — Use `append_to_section`, `prepend_to_section`, or `update_section` for partial updates. CLI users can also use `search_replace_in_file` for atomic find-and-replace.
 - **CLI tools require Obsidian running** — The 33 CLI tools need Obsidian 1.12+ with [CLI enabled](https://obsidian.md/help/cli). If Obsidian is not running, these tools return a clear error while the 30 filesystem tools continue working.
 - **Unicode filenames** — Files with curly apostrophes (U+2019) and some Unicode characters may fail to resolve.
 - **Vault path changes** — If a vault folder is renamed on disk, the `OBSIDIAN_VAULTS` environment variable must be updated manually.
