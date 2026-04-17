@@ -553,9 +553,9 @@ src/
 
 Three tools can cause data loss if used incorrectly. Understand their behavior before use.
 
-### `search_replace_in_file` — known bug ([#4](https://github.com/Wicked-Evolutions/mcp-obsidian/issues/4))
+### `search_replace_in_file` — fixed in v1.0.1 ([#4](https://github.com/Wicked-Evolutions/mcp-obsidian/issues/4))
 
-**Bug:** When the search text is not found in the file, the tool writes the literal string `"NO_CHANGE"` (9 bytes) as the file content, destroying the original. This is a code bug, not intended behavior. **We recommend disabling this tool** via `OBSIDIAN_DISABLED_TOOLS=search_replace_in_file` until the fix ships.
+**Fixed.** Previously, when the search text was not found, the tool wrote the literal string `"NO_CHANGE"` as file content, destroying the original. Now it safely returns an error without modifying the file.
 
 ### `update_section` on H1 headings — by design ([#5](https://github.com/Wicked-Evolutions/mcp-obsidian/issues/5))
 
