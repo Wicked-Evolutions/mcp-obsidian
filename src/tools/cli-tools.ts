@@ -473,6 +473,490 @@ export const cliTools: Tool[] = [
         format: { type: 'string', enum: ['json', 'tsv', 'csv'], description: 'Output format (default: tsv)' }
       }
     }
+  },
+
+  // ── Metadata & Navigation ──
+  {
+    name: 'list_aliases',
+    description: 'List aliases in the vault or for a specific file. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'File name' },
+        path: { type: 'string', description: 'File path' },
+        verbose: { type: 'boolean', description: 'Include file paths' }
+      }
+    }
+  },
+  {
+    name: 'get_file_info',
+    description: 'Get file metadata — name, path, size, created/modified dates. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'File name' },
+        path: { type: 'string', description: 'File path' }
+      }
+    }
+  },
+  {
+    name: 'get_folder_info',
+    description: 'Get folder metadata — file count, folder count, size. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        path: { type: 'string', description: 'Folder path' }
+      },
+      required: ['path']
+    }
+  },
+  {
+    name: 'list_folders',
+    description: 'List folders in the vault, optionally filtered by parent folder. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        folder: { type: 'string', description: 'Filter by parent folder' }
+      }
+    }
+  },
+  {
+    name: 'list_recents',
+    description: 'List recently opened files. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam
+      }
+    }
+  },
+  {
+    name: 'read_random',
+    description: 'Read a random note from the vault. Useful for exploration and serendipitous discovery. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        folder: { type: 'string', description: 'Limit to folder' }
+      }
+    }
+  },
+
+  // ── Bookmarks ──
+  {
+    name: 'add_bookmark',
+    description: 'Add a bookmark to a file, folder, search query, or URL. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'File path to bookmark' },
+        subpath: { type: 'string', description: 'Subpath (heading or block) within file' },
+        folder: { type: 'string', description: 'Folder to bookmark' },
+        search: { type: 'string', description: 'Search query to bookmark' },
+        url: { type: 'string', description: 'URL to bookmark' },
+        title: { type: 'string', description: 'Bookmark title' }
+      }
+    }
+  },
+  {
+    name: 'list_bookmarks',
+    description: 'List all bookmarks. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        verbose: { type: 'boolean', description: 'Include bookmark types' },
+        format: { type: 'string', enum: ['json', 'tsv', 'csv'], description: 'Output format (default: tsv)' }
+      }
+    }
+  },
+
+  // ── File Creation & Rename ──
+  {
+    name: 'create_from_template',
+    description: 'Create a new file using an Obsidian template. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        name: { type: 'string', description: 'File name' },
+        path: { type: 'string', description: 'File path' },
+        template: { type: 'string', description: 'Template name to use' },
+        content: { type: 'string', description: 'Additional initial content' },
+        overwrite: { type: 'boolean', description: 'Overwrite if file exists' }
+      },
+      required: ['template']
+    }
+  },
+  {
+    name: 'rename_file',
+    description: 'Rename a file via Obsidian engine (updates internal link cache). Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'Current file name' },
+        path: { type: 'string', description: 'Current file path' },
+        name: { type: 'string', description: 'New file name' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'move_file',
+    description: 'Move a file via Obsidian engine (updates internal link cache). Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'File name' },
+        path: { type: 'string', description: 'File path' },
+        to: { type: 'string', description: 'Destination folder or path' }
+      },
+      required: ['to']
+    }
+  },
+
+  // ── Version Management ──
+  {
+    name: 'diff_versions',
+    description: 'Diff between two file versions (local or sync). Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'File name' },
+        path: { type: 'string', description: 'File path' },
+        from: { type: 'number', description: 'Version number to diff from' },
+        to: { type: 'number', description: 'Version number to diff to' },
+        filter: { type: 'string', enum: ['local', 'sync'], description: 'Filter by version source' }
+      }
+    }
+  },
+  {
+    name: 'restore_version',
+    description: 'Restore a file to a previous history version. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'File name' },
+        path: { type: 'string', description: 'File path' },
+        version: { type: 'number', description: 'Version number to restore' }
+      },
+      required: ['version']
+    }
+  },
+  {
+    name: 'list_files_with_history',
+    description: 'List files that have version history. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam
+      }
+    }
+  },
+
+  // ── Properties ──
+  {
+    name: 'property_read',
+    description: 'Read a single frontmatter property value from a file. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        name: { type: 'string', description: 'Property name' },
+        file: { type: 'string', description: 'File name' },
+        path: { type: 'string', description: 'File path' }
+      },
+      required: ['name']
+    }
+  },
+
+  // ── Search ──
+  {
+    name: 'search_with_context',
+    description: 'Search vault with matching line context from Obsidian search engine. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        query: { type: 'string', description: 'Search query' },
+        folder: { type: 'string', description: 'Limit to folder' },
+        limit: { type: 'number', description: 'Max files' },
+        case_sensitive: { type: 'boolean', description: 'Case sensitive search' },
+        format: { type: 'string', enum: ['text', 'json'], description: 'Output format (default: text)' }
+      },
+      required: ['query']
+    }
+  },
+
+  // ── Plugin Management ──
+  {
+    name: 'get_plugin_info',
+    description: 'Get detailed info about a specific plugin. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        id: { type: 'string', description: 'Plugin ID' }
+      },
+      required: ['id']
+    }
+  },
+  {
+    name: 'list_enabled_plugins',
+    description: 'List only enabled plugins. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        filter: { type: 'string', enum: ['core', 'community'], description: 'Filter by plugin type' },
+        versions: { type: 'boolean', description: 'Include version numbers' },
+        format: { type: 'string', enum: ['json', 'tsv', 'csv'], description: 'Output format (default: tsv)' }
+      }
+    }
+  },
+  {
+    name: 'enable_plugin',
+    description: 'Enable an installed plugin. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        id: { type: 'string', description: 'Plugin ID' }
+      },
+      required: ['id']
+    }
+  },
+  {
+    name: 'disable_plugin',
+    description: 'Disable a plugin. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        id: { type: 'string', description: 'Plugin ID' }
+      },
+      required: ['id']
+    }
+  },
+
+  // ── Sync (read-only) ──
+  {
+    name: 'sync_status',
+    description: 'Get Obsidian Sync status (paused/active/connected). Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam
+      }
+    }
+  },
+  {
+    name: 'sync_history',
+    description: 'List sync version history for a file. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'File name' },
+        path: { type: 'string', description: 'File path' }
+      }
+    }
+  },
+  {
+    name: 'sync_read_version',
+    description: 'Read a specific sync version of a file. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'File name' },
+        path: { type: 'string', description: 'File path' },
+        version: { type: 'number', description: 'Version number' }
+      },
+      required: ['version']
+    }
+  },
+
+  // ── CSS Snippets ──
+  {
+    name: 'list_snippets',
+    description: 'List installed CSS snippets. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam
+      }
+    }
+  },
+  {
+    name: 'list_enabled_snippets',
+    description: 'List enabled CSS snippets. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam
+      }
+    }
+  },
+  {
+    name: 'enable_snippet',
+    description: 'Enable a CSS snippet. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        name: { type: 'string', description: 'Snippet name' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'disable_snippet',
+    description: 'Disable a CSS snippet. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        name: { type: 'string', description: 'Snippet name' }
+      },
+      required: ['name']
+    }
+  },
+
+  // ── Themes ──
+  {
+    name: 'list_themes',
+    description: 'List installed themes. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        versions: { type: 'boolean', description: 'Include version numbers' }
+      }
+    }
+  },
+  {
+    name: 'get_active_theme',
+    description: 'Get the active theme name and info. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam
+      }
+    }
+  },
+  {
+    name: 'set_theme',
+    description: 'Set the active theme. Pass empty name for default theme. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        name: { type: 'string', description: 'Theme name (empty for default)' }
+      },
+      required: ['name']
+    }
+  },
+
+  // ── Bases / Databases ──
+  {
+    name: 'create_base_item',
+    description: 'Create a new item in an Obsidian base/database. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'Base file name' },
+        path: { type: 'string', description: 'Base file path' },
+        view: { type: 'string', description: 'View name' },
+        name: { type: 'string', description: 'New item name' },
+        content: { type: 'string', description: 'Initial content' }
+      }
+    }
+  },
+  {
+    name: 'list_base_views',
+    description: 'List views in a base file. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        file: { type: 'string', description: 'Base file name' },
+        path: { type: 'string', description: 'Base file path' }
+      }
+    }
+  },
+
+  // ── Vault Info ──
+  {
+    name: 'get_vault_info',
+    description: 'Get vault metadata — name, path, file count, folder count, size. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam
+      }
+    }
+  },
+  {
+    name: 'list_known_vaults',
+    description: 'List all vaults known to Obsidian with their paths. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        verbose: { type: 'boolean', description: 'Include vault paths' }
+      }
+    }
+  },
+
+  // ── Workspace ──
+  {
+    name: 'get_workspace',
+    description: 'Get the workspace tree showing open panes and layout. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        ids: { type: 'boolean', description: 'Include workspace item IDs' }
+      }
+    }
+  },
+
+  // ── Hotkeys ──
+  {
+    name: 'get_hotkey',
+    description: 'Get the hotkey binding for a specific command. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        id: { type: 'string', description: 'Command ID' },
+        verbose: { type: 'boolean', description: 'Show if custom or default' }
+      },
+      required: ['id']
+    }
+  },
+  {
+    name: 'list_hotkeys',
+    description: 'List all hotkey bindings. Requires Obsidian running.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vault: vaultParam,
+        verbose: { type: 'boolean', description: 'Show if custom or default' },
+        all: { type: 'boolean', description: 'Include commands without hotkeys' },
+        format: { type: 'string', enum: ['json', 'tsv', 'csv'], description: 'Output format (default: tsv)' }
+      }
+    }
   }
 ];
 
@@ -758,6 +1242,259 @@ export function createCliHandlers(config: Config): Record<string, (args: any) =>
       if (args.format) cliArgs.push(`format=${args.format}`);
       const result = await execCliForVault(config, args.vault, 'unresolved', cliArgs);
       return ok(result || 'No unresolved links found.');
+    },
+
+    // ── Metadata & Navigation ──
+    list_aliases: async (args) => {
+      const cliArgs = [...fileArg(args)];
+      if (args.verbose) cliArgs.push('verbose');
+      const result = await execCliForVault(config, args.vault, 'aliases', cliArgs);
+      return ok(result || 'No aliases found.');
+    },
+
+    get_file_info: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'file', fileArg(args));
+      return ok(result || 'File not found.');
+    },
+
+    get_folder_info: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'folder', [`path=${args.path}`]);
+      return ok(result || 'Folder not found.');
+    },
+
+    list_folders: async (args) => {
+      const cliArgs: string[] = [];
+      if (args.folder) cliArgs.push(`folder=${args.folder}`);
+      const result = await execCliForVault(config, args.vault, 'folders', cliArgs);
+      return ok(result || 'No folders found.');
+    },
+
+    list_recents: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'recents');
+      return ok(result || 'No recent files.');
+    },
+
+    read_random: async (args) => {
+      const cliArgs: string[] = [];
+      if (args.folder) cliArgs.push(`folder=${args.folder}`);
+      const result = await execCliForVault(config, args.vault, 'random:read', cliArgs);
+      return ok(result || 'No notes found.');
+    },
+
+    // ── Bookmarks ──
+    add_bookmark: async (args) => {
+      const cliArgs: string[] = [];
+      if (args.file) cliArgs.push(`file=${args.file}`);
+      if (args.subpath) cliArgs.push(`subpath=${args.subpath}`);
+      if (args.folder) cliArgs.push(`folder=${args.folder}`);
+      if (args.search) cliArgs.push(`search=${args.search}`);
+      if (args.url) cliArgs.push(`url=${args.url}`);
+      if (args.title) cliArgs.push(`title=${args.title}`);
+      await execCliForVault(config, args.vault, 'bookmark', cliArgs);
+      return ok('Bookmark added.');
+    },
+
+    list_bookmarks: async (args) => {
+      const cliArgs: string[] = [];
+      if (args.verbose) cliArgs.push('verbose');
+      if (args.format) cliArgs.push(`format=${args.format}`);
+      const result = await execCliForVault(config, args.vault, 'bookmarks', cliArgs);
+      return ok(result || 'No bookmarks found.');
+    },
+
+    // ── File Creation & Rename ──
+    create_from_template: async (args) => {
+      const cliArgs: string[] = [`template=${args.template}`];
+      if (args.name) cliArgs.push(`name=${args.name}`);
+      if (args.path) cliArgs.push(`path=${args.path}`);
+      if (args.content) cliArgs.push(`content=${args.content}`);
+      if (args.overwrite) cliArgs.push('overwrite');
+      await execCliForVault(config, args.vault, 'create', cliArgs);
+      return ok(`File created from template "${args.template}".`);
+    },
+
+    rename_file: async (args) => {
+      const cliArgs = [...fileArg(args), `name=${args.name}`];
+      await execCliForVault(config, args.vault, 'rename', cliArgs);
+      return ok(`File renamed to "${args.name}".`);
+    },
+
+    move_file: async (args) => {
+      const cliArgs = [...fileArg(args), `to=${args.to}`];
+      await execCliForVault(config, args.vault, 'move', cliArgs);
+      return ok(`File moved to "${args.to}".`);
+    },
+
+    // ── Version Management ──
+    diff_versions: async (args) => {
+      const cliArgs = [...fileArg(args)];
+      if (args.from !== undefined) cliArgs.push(`from=${args.from}`);
+      if (args.to !== undefined) cliArgs.push(`to=${args.to}`);
+      if (args.filter) cliArgs.push(`filter=${args.filter}`);
+      const result = await execCliForVault(config, args.vault, 'diff', cliArgs);
+      return ok(result || 'No versions to diff.');
+    },
+
+    restore_version: async (args) => {
+      const cliArgs = [...fileArg(args), `version=${args.version}`];
+      await execCliForVault(config, args.vault, 'history:restore', cliArgs);
+      return ok(`Restored to version ${args.version}.`);
+    },
+
+    list_files_with_history: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'history:list');
+      return ok(result || 'No files with history.');
+    },
+
+    // ── Properties ──
+    property_read: async (args) => {
+      const cliArgs = [`name=${args.name}`, ...fileArg(args)];
+      const result = await execCliForVault(config, args.vault, 'property:read', cliArgs);
+      return ok(result ?? '(property not set)');
+    },
+
+    // ── Search ──
+    search_with_context: async (args) => {
+      const cliArgs = [`query=${args.query}`];
+      if (args.folder) cliArgs.push(`path=${args.folder}`);
+      if (args.limit) cliArgs.push(`limit=${args.limit}`);
+      if (args.case_sensitive) cliArgs.push('case');
+      if (args.format) cliArgs.push(`format=${args.format}`);
+      const result = await execCliForVault(config, args.vault, 'search:context', cliArgs, 30000);
+      return ok(result || 'No results found.');
+    },
+
+    // ── Plugin Management ──
+    get_plugin_info: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'plugin', [`id=${args.id}`]);
+      return ok(result || 'Plugin not found.');
+    },
+
+    list_enabled_plugins: async (args) => {
+      const cliArgs: string[] = [];
+      if (args.filter) cliArgs.push(`filter=${args.filter}`);
+      if (args.versions) cliArgs.push('versions');
+      if (args.format) cliArgs.push(`format=${args.format}`);
+      const result = await execCliForVault(config, args.vault, 'plugins:enabled', cliArgs);
+      return ok(result || 'No enabled plugins.');
+    },
+
+    enable_plugin: async (args) => {
+      await execCliForVault(config, args.vault, 'plugin:enable', [`id=${args.id}`]);
+      return ok(`Plugin "${args.id}" enabled.`);
+    },
+
+    disable_plugin: async (args) => {
+      await execCliForVault(config, args.vault, 'plugin:disable', [`id=${args.id}`]);
+      return ok(`Plugin "${args.id}" disabled.`);
+    },
+
+    // ── Sync (read-only) ──
+    sync_status: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'sync:status');
+      return ok(result || 'Sync status unavailable.');
+    },
+
+    sync_history: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'sync:history', fileArg(args));
+      return ok(result || 'No sync history.');
+    },
+
+    sync_read_version: async (args) => {
+      const cliArgs = [...fileArg(args), `version=${args.version}`];
+      const result = await execCliForVault(config, args.vault, 'sync:read', cliArgs);
+      return ok(result || 'Version not found.');
+    },
+
+    // ── CSS Snippets ──
+    list_snippets: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'snippets');
+      return ok(result || 'No snippets installed.');
+    },
+
+    list_enabled_snippets: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'snippets:enabled');
+      return ok(result || 'No snippets enabled.');
+    },
+
+    enable_snippet: async (args) => {
+      await execCliForVault(config, args.vault, 'snippet:enable', [`name=${args.name}`]);
+      return ok(`Snippet "${args.name}" enabled.`);
+    },
+
+    disable_snippet: async (args) => {
+      await execCliForVault(config, args.vault, 'snippet:disable', [`name=${args.name}`]);
+      return ok(`Snippet "${args.name}" disabled.`);
+    },
+
+    // ── Themes ──
+    list_themes: async (args) => {
+      const cliArgs: string[] = [];
+      if (args.versions) cliArgs.push('versions');
+      const result = await execCliForVault(config, args.vault, 'themes', cliArgs);
+      return ok(result || 'No themes installed.');
+    },
+
+    get_active_theme: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'theme');
+      return ok(result || 'Default theme.');
+    },
+
+    set_theme: async (args) => {
+      await execCliForVault(config, args.vault, 'theme:set', [`name=${args.name}`]);
+      return ok(`Theme set to "${args.name || 'default'}".`);
+    },
+
+    // ── Bases / Databases ──
+    create_base_item: async (args) => {
+      const cliArgs = [...fileArg(args)];
+      if (args.view) cliArgs.push(`view=${args.view}`);
+      if (args.name) cliArgs.push(`name=${args.name}`);
+      if (args.content) cliArgs.push(`content=${args.content}`);
+      await execCliForVault(config, args.vault, 'base:create', cliArgs);
+      return ok('Base item created.');
+    },
+
+    list_base_views: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'base:views', fileArg(args));
+      return ok(result || 'No views found.');
+    },
+
+    // ── Vault Info ──
+    get_vault_info: async (args) => {
+      const result = await execCliForVault(config, args.vault, 'vault');
+      return ok(result || 'Vault info unavailable.');
+    },
+
+    list_known_vaults: async (_args) => {
+      const cliArgs: string[] = ['verbose'];
+      const result = await execCliForVault(config, undefined, 'vaults', cliArgs);
+      return ok(result || 'No vaults found.');
+    },
+
+    // ── Workspace ──
+    get_workspace: async (args) => {
+      const cliArgs: string[] = [];
+      if (args.ids) cliArgs.push('ids');
+      const result = await execCliForVault(config, args.vault, 'workspace', cliArgs);
+      return ok(result || 'Workspace empty.');
+    },
+
+    // ── Hotkeys ──
+    get_hotkey: async (args) => {
+      const cliArgs = [`id=${args.id}`];
+      if (args.verbose) cliArgs.push('verbose');
+      const result = await execCliForVault(config, args.vault, 'hotkey', cliArgs);
+      return ok(result || 'No hotkey assigned.');
+    },
+
+    list_hotkeys: async (args) => {
+      const cliArgs: string[] = [];
+      if (args.verbose) cliArgs.push('verbose');
+      if (args.all) cliArgs.push('all');
+      if (args.format) cliArgs.push(`format=${args.format}`);
+      const result = await execCliForVault(config, args.vault, 'hotkeys', cliArgs);
+      return ok(result || 'No hotkeys configured.');
     }
   };
 
