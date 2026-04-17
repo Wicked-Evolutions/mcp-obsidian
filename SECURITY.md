@@ -4,7 +4,7 @@
 
 If you discover a security vulnerability in mcp-obsidian, **do not open a public issue.**
 
-Email: **security@wickedevolutions.com**
+Instead, please use [GitHub's private vulnerability reporting](https://github.com/Wicked-Evolutions/mcp-obsidian/security/advisories/new) to report it directly.
 
 Include:
 - Description of the vulnerability
