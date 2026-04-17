@@ -90,33 +90,51 @@ claude mcp add -e OBSIDIAN_VAULTS='{"My Vault":"/path/to/vault"}' obsidian -- np
 
 Any AI client or IDE that supports the Model Context Protocol can use mcp-obsidian — add the server config block to your client's MCP configuration.
 
-### Multiple Vaults
+### Multiple Vaults — One Server, All Vaults
 
-Pass multiple vaults as a JSON object in `OBSIDIAN_VAULTS`:
+A single mcp-obsidian server handles all your vaults. Pass them as a JSON object in `OBSIDIAN_VAULTS` — every tool accepts an optional `vault` parameter to target a specific vault:
 
 ```json
 {
-  "OBSIDIAN_VAULTS": "{\"Work\":\"/path/to/work-vault\",\"Personal\":\"/path/to/personal-vault\",\"Notes\":\"/path/to/notes\"}"
+  "mcpServers": {
+    "obsidian": {
+      "command": "npx",
+      "args": ["@wickedevolutions/mcp-obsidian"],
+      "env": {
+        "OBSIDIAN_VAULTS": "{\"Work\":\"/Users/me/Vaults/Work\",\"Personal\":\"/Users/me/Vaults/Personal\",\"Research\":\"/Users/me/Vaults/Research\",\"Client Projects\":\"/Users/me/Vaults/Client Projects\"}"
+      }
+    }
+  }
 }
 ```
 
-Then use the `vault` parameter on any tool call:
+Then use the `vault` parameter on any tool call to target a specific vault:
 
 ```json
 { "tool": "read_file", "args": { "vault": "Work", "path": "my-note.md" } }
 ```
 
-Omitting `vault` defaults to the first vault in the list.
+```json
+{ "tool": "search_all_vaults", "args": { "query": "project deadline" } }
+```
 
-### Single Vault (Alternative)
+Omitting `vault` defaults to the first vault in the list. Cross-vault tools like `search_all_vaults`, `find_note_by_name`, and `get_cross_vault_links` operate across all configured vaults in a single call.
+
+### Single Vault
 
 For a single vault, you can use the simpler environment variables instead of `OBSIDIAN_VAULTS`:
 
 ```json
 {
-  "env": {
-    "OBSIDIAN_VAULT_PATH": "/path/to/your/vault",
-    "OBSIDIAN_VAULT_NAME": "My Vault"
+  "mcpServers": {
+    "obsidian": {
+      "command": "npx",
+      "args": ["@wickedevolutions/mcp-obsidian"],
+      "env": {
+        "OBSIDIAN_VAULT_PATH": "/Users/me/Vaults/My Vault",
+        "OBSIDIAN_VAULT_NAME": "My Vault"
+      }
+    }
   }
 }
 ```
